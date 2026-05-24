@@ -1,2 +1,2 @@
-# 1.0.0
-- nothing yet
+# 1.0.0-alpha.1
+- Released alpha build on GitHub

@@ -8,7 +8,7 @@
 	},
 	"id": "vanouper.integratedpracticemodelist",
 	"name": "IntegratedPracticeModeList",
-	"version": "v1.0.0",
+	"version": "v1.0.0-alpha.1",
 	"developer": "Vanouper",
 	"description": "The Practice Mode List by Anceps.",
 	"dependencies": {
