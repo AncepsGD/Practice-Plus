@@ -6,12 +6,17 @@
 		"mac": "2.2081",
 		"ios": "2.2081"
 	},
-	"id": "vanouper.integratedpracticemodelist",
-	"name": "IntegratedPracticeModeList",
-	"version": "v1.0.0-alpha.1",
+	"id": "vanouper.practiceplus",
+	"name": "Practice+",
+	"version": "v1.0.0-alpha.2",
 	"developer": "Vanouper",
-	"description": "The Practice Mode List by Anceps.",
+	"description": "Expand Practice like never before :)",
 	"dependencies": {
 		"geode.node-ids": ">=v1.23.3"
+	},
+	"resources": {
+		"sprites": [
+			"resources/*.png"
+		]
 	}
 }

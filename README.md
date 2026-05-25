@@ -1,4 +1,4 @@
-# IntegratedPracticeModeList
+# PracticePlus
 
 ignore README.md
 
