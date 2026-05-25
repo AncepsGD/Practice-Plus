@@ -4,12 +4,12 @@
 
 struct LevelPack {
     std::string name;
-    std::string spriteFrameName; // Icon used on the creator menu
-    std::vector<int> levelIds;    // Custom list of level IDs to load
+    std::string spriteFrameName;
+    std::vector<int> levelIds;
 };
 
 namespace LevelPacks {
-    // Custom Level Packs - Add, remove, or customize any packs and level IDs here!
+    // Add, remove, or customize any packs and level IDs here!
     inline const std::vector<LevelPack> customPacks = {
         {
             "Impossible NC Pack",

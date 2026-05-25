@@ -16,7 +16,7 @@ std::vector<PML> PracticeModeList::levels;
 bool PracticeModeList::levelsLoaded = false;
 std::string PracticeModeList::currentListUrl = "https://raw.githubusercontent.com/AncepsGD/practice-mode-list/refs/heads/main/levels.json";
 
-// Helper to recursively find and remove any active loading circles in the scene tree
+// Helper to recursively find and remove any active loading circles 
 void removeLoadingCircles(cocos2d::CCNode* parent) {
     if (!parent) return;
     auto children = parent->getChildren();
@@ -32,7 +32,7 @@ void removeLoadingCircles(cocos2d::CCNode* parent) {
     }
 }
 
-// Stagger helper using Cocos scheduler to keep the thread unlocked
+// Rate-limiter using Cocos scheduler
 class PMLDelayHandler : public cocos2d::CCObject {
 public:
     std::function<void()> on_trigger;
@@ -59,7 +59,6 @@ public:
     }
 };
 
-// State tracker for our sequential page queries
 struct PMLSequentialFetch {
     bool active = false;
     bool delivering = false;
@@ -71,55 +70,49 @@ struct PMLSequentialFetch {
     std::string orig_query = "";
     int consecutive_failures = 0; // Tracks consecutive network/empty failures
 };
-static PMLSequentialFetch g_pmlFetch;
+static PMLSequentialFetch pmlFetch;
 
-// Track the active UI layer to prevent transition scene issues
-static LevelBrowserLayer* s_activeBrowser = nullptr;
+// Track active UI layer to prevent transition issues
+static LevelBrowserLayer* activeBrowser = nullptr;
 
 void resetPmlFetch() {
-    log::info("PML: Resetting fetch state. Clearing {} gathered levels.", g_pmlFetch.gathered_levels.size());
-    g_pmlFetch.active = false;
-    g_pmlFetch.delivering = false;
-    g_pmlFetch.page = 0;
-    g_pmlFetch.expected_ids.clear();
-    g_pmlFetch.current_index = 0;
-    g_pmlFetch.consecutive_failures = 0;
+    pmlFetch.active = false;
+    pmlFetch.delivering = false;
+    pmlFetch.page = 0;
+    pmlFetch.expected_ids.clear();
+    pmlFetch.current_index = 0;
+    pmlFetch.consecutive_failures = 0;
 
-    // Release active page allocations
-    for (auto const& [id, level] : g_pmlFetch.gathered_levels) {
+    for (auto const& [id, level] : pmlFetch.gathered_levels) {
         if (level) {
             level->release();
         }
     }
-    g_pmlFetch.gathered_levels.clear();
+    pmlFetch.gathered_levels.clear();
 }
 
-// Forward declaration of sequential loader step function
 void fetchNextPmlLevel();
 
-// Stagger-request the page levels one by one using isolated search objects
+// Request levels one by one using isolated search objects
 void fetchNextPmlLevel() {
-    if (!g_pmlFetch.active) {
-        log::warn("PML Diagnostic: fetchNextPmlLevel called, but g_pmlFetch.active is FALSE!");
+    if (!pmlFetch.active) {
         return;
     }
-    if (!s_activeBrowser) {
-        log::error("PML Diagnostic Error: s_activeBrowser is NULL! Cannot retrieve search object properties.");
+    if (!activeBrowser) {
         Notification::create("Error: Browser context lost!", NotificationIcon::Error)->show();
         return;
     }
 
-    // Rate-Limit Watchdog Check:
-    // If we hit 3 or more consecutive failures, stop fetching immediately to prevent further IP blocks
-    if (g_pmlFetch.consecutive_failures >= 3) {
-        log::error("PML Rate-Limit Detected! Halting sequential loader after {} consecutive failures.", g_pmlFetch.consecutive_failures);
-        g_pmlFetch.active = false;
+    // Rate-Limit Check:
+    // If 3 or more consecutive level requests fail, stop fetching immediately to prevent temp-ban
+    if (pmlFetch.consecutive_failures >= 3) {
+        pmlFetch.active = false;
         removeLoadingCircles(cocos2d::CCDirector::sharedDirector()->getRunningScene());
         
         FLAlertLayer::create(
             "Rate-Limit Warning", 
-            "Multiple queries in a row failed.\n"
-            "RobTop's servers may be temporarily rate-limiting or blocking your IP address.\n\n"
+            "Multiple requests in a row failed.\n"
+            "RobTop's servers may be temporarily rate-limiting or blocking your IP address.\n"
             "Please wait a few minutes before trying to load the list again.", 
             "OK"
         )->show();
@@ -127,97 +120,78 @@ void fetchNextPmlLevel() {
     }
 
     // Finished processing the 10 levels on the current page. Assemble and render.
-    if (g_pmlFetch.current_index >= g_pmlFetch.expected_ids.size()) {
-        log::info("PML: All expected IDs on page {} evaluated. Assembling browser final render list.", g_pmlFetch.page);
-        g_pmlFetch.active = false;
-        g_pmlFetch.delivering = true;
+    if (pmlFetch.current_index >= pmlFetch.expected_ids.size()) {
+        pmlFetch.active = false;
+        pmlFetch.delivering = true;
 
         auto final_array = cocos2d::CCArray::create();
         int successfully_loaded = 0;
-        for (int id : g_pmlFetch.expected_ids) {
-            if (g_pmlFetch.gathered_levels.count(id)) {
-                final_array->addObject(g_pmlFetch.gathered_levels[id]);
+        for (int id : pmlFetch.expected_ids) {
+            if (pmlFetch.gathered_levels.count(id)) {
+                final_array->addObject(pmlFetch.gathered_levels[id]);
                 successfully_loaded++;
             }
         }
-
-        log::info("PML: Rendering complete. Found {} out of {} target levels.", successfully_loaded, g_pmlFetch.expected_ids.size());
         
         if (successfully_loaded == 0) {
-            FLAlertLayer::create("Warning", "None of the levels on this page could be loaded from the servers.", "OK")->show();
+            FLAlertLayer::create("Warning", "No levels on this page loaded from the servers.", "OK")->show();
         }
 
-        // Deliver levels directly to the browser view layout
-        s_activeBrowser->setupLevelBrowser(final_array);
+        // Send levels directly to browser view layout
+        activeBrowser->setupLevelBrowser(final_array);
         
-        // Dynamically find and fade out any LoadingCircles across the running scene tree
+        // Dynamically fade any LoadingCircles
         removeLoadingCircles(cocos2d::CCDirector::sharedDirector()->getRunningScene());
         return;
     }
 
-    int levelId = g_pmlFetch.expected_ids[g_pmlFetch.current_index];
-    log::info("PML: Initiating query {}/{} (Level ID: {})", g_pmlFetch.current_index + 1, g_pmlFetch.expected_ids.size(), levelId);
+    int levelId = pmlFetch.expected_ids[pmlFetch.current_index];
 
-    // CRITICAL: We use SearchType::Search (Type 0) to resolve unlisted levels successfully by exact ID!
     auto singleSearch = GJSearchObject::create(SearchType::Search, std::to_string(levelId));
     singleSearch->retain(); // Keep search object alive during our staggered delay
 
-    // Stagger requests by 1.0 seconds to keep Rob's servers completely safe from rate-limiting
+    // Limit requests by 1.0 seconds to keep Rob's servers happy :)
     PMLDelayHandler::sched_delay(1.0f, [singleSearch, levelId]() {
-        if (g_pmlFetch.active) {
-            log::info("PML: Sending staggered query packet to server for ID {}", levelId);
+        if (pmlFetch.active) {
             GameLevelManager::sharedState()->getOnlineLevels(singleSearch);
-        } else {
-            log::warn("PML: Delay timer finished, but fetch sequence was already aborted for ID {}", levelId);
         }
-        singleSearch->release(); // Balance the retain call
+        singleSearch->release();
     });
 }
 
 class $modify(MyGameLevelManager, GameLevelManager) {
     void getOnlineLevels(GJSearchObject* searchObj) {
-        if (searchObj) {
-            log::info("PML: getOnlineLevels called with search type: {}, query: '{}'", (int)searchObj->m_searchType, searchObj->m_searchQuery);
-        }
 
-        // Intercept standard page query initialization (Type 19)
-        if (searchObj && searchObj->m_searchType == static_cast<SearchType>(19) && !g_pmlFetch.active) {
-            log::info("PML: Intercepting page list search (Type 19). Populating expected IDs for page {}.", searchObj->m_page);
+        if (searchObj && searchObj->m_searchType == static_cast<SearchType>(19) && !pmlFetch.active) {
             resetPmlFetch();
 
             int startIdx = searchObj->m_page * 10;
             int endIdx = std::min(startIdx + 10, static_cast<int>(PracticeModeList::levels.size()));
             
-            log::info("PML: Selected rank slice index: {} to {}. ModeList total: {}", startIdx, endIdx, PracticeModeList::levels.size());
 
             for (int i = startIdx; i < endIdx; ++i) {
-                g_pmlFetch.expected_ids.push_back(PracticeModeList::levels[i].id);
-                log::info("PML: Added ID {} at index {} to query queue.", PracticeModeList::levels[i].id, i);
+                pmlFetch.expected_ids.push_back(PracticeModeList::levels[i].id);
             }
 
-            if (g_pmlFetch.expected_ids.empty()) {
-                log::error("PML Error: No expected level IDs resolved for this page index!");
-                FLAlertLayer::create("Error", "The practice mode list is empty or invalid.", "OK")->show();
+            if (pmlFetch.expected_ids.empty()) {
+                FLAlertLayer::create("Error", "End of PML list or invalid.", "OK")->show();
                 return;
             }
 
-            g_pmlFetch.active = true;
-            g_pmlFetch.current_index = 0;
-            g_pmlFetch.page = searchObj->m_page;
-            g_pmlFetch.orig_type = searchObj->m_searchType;
-            g_pmlFetch.orig_query = searchObj->m_searchQuery;
+            pmlFetch.active = true;
+            pmlFetch.current_index = 0;
+            pmlFetch.page = searchObj->m_page;
+            pmlFetch.orig_type = searchObj->m_searchType;
+            pmlFetch.orig_query = searchObj->m_searchQuery;
 
             // Spawn loading circles
-            if (s_activeBrowser && s_activeBrowser->isRunning()) {
-                log::info("PML: Browser is already running on-screen. Spawning loading circle and fetching next level.");
+            if (activeBrowser && activeBrowser->isRunning()) {
                 
                 auto loading = LoadingCircle::create();
                 loading->setParent(cocos2d::CCDirector::sharedDirector()->getRunningScene());
                 loading->show();
 
                 fetchNextPmlLevel();
-            } else {
-                log::info("PML: Browser is transitioning. Waiting for onEnter() hook before fetching.");
             }
             return;
         }
@@ -227,17 +201,14 @@ class $modify(MyGameLevelManager, GameLevelManager) {
 
 class $modify(MyLevelBrowserLayer, LevelBrowserLayer) {
     bool init(GJSearchObject* searchObj) {
-        log::info("PML: LevelBrowserLayer::init() triggered.");
         resetPmlFetch();
-        s_activeBrowser = this;
+        activeBrowser = this;
 
         if (!LevelBrowserLayer::init(searchObj)) {
-            log::error("PML: Base LevelBrowserLayer::init returned false!");
             return false;
         }
 
         if (searchObj && searchObj->m_searchType == static_cast<SearchType>(19)) {
-            log::info("PML: Setting browser total item count back to {}", PracticeModeList::levels.size());
             this->m_itemCount = PracticeModeList::levels.size();
         }
         return true;
@@ -245,32 +216,28 @@ class $modify(MyLevelBrowserLayer, LevelBrowserLayer) {
 
     void onEnter() {
         LevelBrowserLayer::onEnter();
-        log::info("PML: LevelBrowserLayer is now active on screen.");
 
-        // Kick off loading sequence
-        if (g_pmlFetch.active && g_pmlFetch.current_index == 0) {
-            log::info("PML: Triggering safe initial level fetch sequence.");
+        // Kick off loading
+        if (pmlFetch.active && pmlFetch.current_index == 0) {
             fetchNextPmlLevel();
         }
     }
 
     void onExit() {
-        log::info("PML: LevelBrowserLayer exiting. Clearing references.");
-        if (s_activeBrowser == this) {
-            s_activeBrowser = nullptr;
+        if (activeBrowser == this) {
+            activeBrowser = nullptr;
         }
         resetPmlFetch();
         LevelBrowserLayer::onExit();
     }
 
     void loadLevelsFinished(cocos2d::CCArray* levels, char const* key, int p2) {
-        if (g_pmlFetch.active) {
-            int targetId = g_pmlFetch.expected_ids[g_pmlFetch.current_index];
+        if (pmlFetch.active) {
+            int targetId = pmlFetch.expected_ids[pmlFetch.current_index];
             std::string keyStr = key ? key : "";
             std::string targetIdStr = std::to_string(targetId);
 
             if (keyStr.find(targetIdStr) != std::string::npos) {
-                log::info("PML: loadLevelsFinished intercepted for key: {}", keyStr);
                 GJGameLevel* matchedLvl = nullptr;
 
                 if (levels) {
@@ -288,7 +255,7 @@ class $modify(MyLevelBrowserLayer, LevelBrowserLayer) {
                             auto lvl = static_cast<GJGameLevel*>(levels->objectAtIndex(i));
                             if (lvl) {
                                 int levelIdVal = static_cast<int>(lvl->m_levelID);
-                                if (std::find(g_pmlFetch.expected_ids.begin(), g_pmlFetch.expected_ids.end(), levelIdVal) != g_pmlFetch.expected_ids.end()) {
+                                if (std::find(pmlFetch.expected_ids.begin(), pmlFetch.expected_ids.end(), levelIdVal) != pmlFetch.expected_ids.end()) {
                                     matchedLvl = lvl;
                                     break;
                                 }
@@ -299,19 +266,17 @@ class $modify(MyLevelBrowserLayer, LevelBrowserLayer) {
 
                 if (matchedLvl) {
                     int resolvedId = static_cast<int>(matchedLvl->m_levelID);
-                    log::info("PML Success: Successfully resolved level '{}' (ID: {})", matchedLvl->m_levelName, resolvedId);
-                    if (g_pmlFetch.gathered_levels.count(resolvedId) == 0) {
-                        g_pmlFetch.gathered_levels[resolvedId] = matchedLvl;
+                    if (pmlFetch.gathered_levels.count(resolvedId) == 0) {
+                        pmlFetch.gathered_levels[resolvedId] = matchedLvl;
                         matchedLvl->retain();
                     }
-                    g_pmlFetch.consecutive_failures = 0;
+                    pmlFetch.consecutive_failures = 0;
                 } else {
-                    log::warn("PML: Level ID {} returned zero server matches", targetId);
                     Notification::create(fmt::format("Failed level ID: {}", targetId), NotificationIcon::Warning)->show();
-                    g_pmlFetch.consecutive_failures++;
+                    pmlFetch.consecutive_failures++;
                 }
 
-                g_pmlFetch.current_index++;
+                pmlFetch.current_index++;
                 fetchNextPmlLevel();
                 return;
             }
@@ -321,17 +286,16 @@ class $modify(MyLevelBrowserLayer, LevelBrowserLayer) {
     }
 
     void loadLevelsFailed(char const* key, int errorCode) {
-        if (g_pmlFetch.active) {
-            int failedId = g_pmlFetch.expected_ids[g_pmlFetch.current_index];
+        if (pmlFetch.active) {
+            int failedId = pmlFetch.expected_ids[pmlFetch.current_index];
             std::string keyStr = key ? key : "";
             std::string failedIdStr = std::to_string(failedId);
 
             if (keyStr.find(failedIdStr) != std::string::npos) {
-                log::warn("PML Warning: Online query failed for level ID {}", failedId);
                 Notification::create(fmt::format("Skipped ID (Failed): {}", failedId), NotificationIcon::Warning)->show();
-                g_pmlFetch.consecutive_failures++;
+                pmlFetch.consecutive_failures++;
 
-                g_pmlFetch.current_index++;
+                pmlFetch.current_index++;
                 fetchNextPmlLevel();
                 return;
             }
@@ -340,9 +304,8 @@ class $modify(MyLevelBrowserLayer, LevelBrowserLayer) {
     }
 
     void setupLevelBrowser(cocos2d::CCArray* levels) {
-        if (g_pmlFetch.delivering) {
-            log::info("PML: Delivering final array bypass triggered.");
-            g_pmlFetch.delivering = false;
+        if (pmlFetch.delivering) {
+            pmlFetch.delivering = false;
             
             this->m_itemCount = PracticeModeList::levels.size();
             LevelBrowserLayer::setupLevelBrowser(levels);
@@ -373,12 +336,10 @@ void PracticeModeList::loadPracticeList(
     Function<void()> success,
     CopyableFunction<void(int)> failure
 ) {
-    log::info("PML: Starting fetch from GitHub URL: {}", currentListUrl);
     listener.spawn(
         web::WebRequest().get(currentListUrl),
         [failure = std::move(failure), success = std::move(success)](web::WebResponse answer) mutable {
             if (!answer.ok()) {
-                log::error("PML Error: GitHub request failed with web response code: {}", answer.code());
                 return failure(answer.code());
             }
             
@@ -387,7 +348,6 @@ void PracticeModeList::loadPracticeList(
 
             auto jsonRes = answer.json();
             if (!jsonRes.isOk()) {
-                log::error("PML Error: Received malformed JSON format!");
                 return failure(-1);
             }
 
@@ -395,7 +355,6 @@ void PracticeModeList::loadPracticeList(
 
             auto arrayRes = json.as<std::vector<matjson::Value>>();
             if (!arrayRes.isOk()) {
-                log::error("PML Error: Root JSON element is not a standard array structure!");
                 return failure(-2);
             }
             
@@ -437,9 +396,7 @@ void PracticeModeList::loadPracticeList(
                 }
             }
             
-            log::info("PML: Loaded {} valid levels from list JSON", levels.size());
             if (levels.empty()) {
-                log::error("PML Error: No valid levels resolved from parsed array elements.");
                 return failure(-3);
             }
 
@@ -460,7 +417,7 @@ class $modify(MyCreatorLayer, CreatorLayer) {
         auto creatorMenu = this->getChildByID("creator-buttons-menu");
         if (!creatorMenu) return true;
 
-        // 1. Practice Mode List button (Using folder list icon)
+        // 1. Practice Mode List button
         auto spritePML = CCSprite::createWithSpriteFrameName("GJ_viewListsBtn_001.png");
         auto buttonPML = CCMenuItemSpriteExtra::create(
             spritePML,
@@ -469,7 +426,7 @@ class $modify(MyCreatorLayer, CreatorLayer) {
         );
         buttonPML->setID("PML-button");
 
-        // 2. Open Verifications list button (Using prestigious trophy icon!)
+        // 2. Open Verifications list button
         auto spriteVerif = CCSprite::createWithSpriteFrameName("GJ_viewListsBtn_001.png");
         auto buttonVerif = CCMenuItemSpriteExtra::create(
             spriteVerif,
@@ -486,13 +443,11 @@ class $modify(MyCreatorLayer, CreatorLayer) {
     }
 
     void onPMLClick(CCObject* sender) {
-        log::info("PML: PML list button clicked.");
         PracticeModeList::currentListUrl = "https://raw.githubusercontent.com/AncepsGD/practice-mode-list/refs/heads/main/levels.json";
         this->startPmlLoadingSequence();
     }
 
     void onVerificationsClick(CCObject* sender) {
-        log::info("PML: Verifications list button clicked.");
         PracticeModeList::currentListUrl = "https://raw.githubusercontent.com/AncepsGD/practice-mode-list/refs/heads/main/verifications.json";
         this->startPmlLoadingSequence();
     }
@@ -506,7 +461,6 @@ class $modify(MyCreatorLayer, CreatorLayer) {
             m_fields->m_listener,
             [this, loading]() {
                 loading->fadeAndRemove();
-                log::info("PML: List loaded successfully from GitHub.");
 
                 if (PracticeModeList::levels.empty()) {
                     FLAlertLayer::create("Error", "No levels were detected in the source JSON.", "OK")->show();
@@ -517,7 +471,6 @@ class $modify(MyCreatorLayer, CreatorLayer) {
             },
             [loading](int errorCode) {
                 loading->fadeAndRemove();
-                log::error("PML Error: Unable to fetch list. Parse code: {}", errorCode);
                 FLAlertLayer::create(
                     "Error",
                     fmt::format("Failed to download or parse the selected list.\nCode: {}", errorCode),
@@ -536,9 +489,7 @@ class $modify(MyCreatorLayer, CreatorLayer) {
             }
         }
 
-        log::info("PML: Assembled launch search object (Type 19) for browser creation.");
         auto searchObj = GJSearchObject::create(static_cast<SearchType>(19), searchQuery);
-
         auto browserLayer = LevelBrowserLayer::create(searchObj);
         auto scene = CCScene::create();
         scene->addChild(browserLayer);
