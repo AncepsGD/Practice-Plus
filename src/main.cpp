@@ -10,13 +10,16 @@
 #include <map>
 #include <algorithm>
 
+// NOTE: The following code features AI-assisted code. Any code with AI-assistance will be marked with @@@
+// ANOTHER NOTE: Code for the PML was made with https://github.com/hiimjasmine00/IntegratedDemonlist/tree/master as a reference.
+
 using namespace geode::prelude;
 
 std::vector<PML> PracticeModeList::levels;
 bool PracticeModeList::levelsLoaded = false;
 std::string PracticeModeList::currentListUrl = "https://raw.githubusercontent.com/AncepsGD/practice-mode-list/refs/heads/main/levels.json";
 
-// Helper to recursively find and remove any active loading circles 
+// Recursively finds and removes any active loading circles 
 void removeLoadingCircles(cocos2d::CCNode* parent) {
     if (!parent) return;
     auto children = parent->getChildren();
@@ -32,7 +35,7 @@ void removeLoadingCircles(cocos2d::CCNode* parent) {
     }
 }
 
-// Rate-limiter using Cocos scheduler
+// Rate-limiter using Cocos scheduler @@@
 class PMLDelayHandler : public cocos2d::CCObject {
 public:
     std::function<void()> on_trigger;
@@ -93,7 +96,7 @@ void resetPmlFetch() {
 
 void fetchNextPmlLevel();
 
-// Request levels one by one using isolated search objects
+// Request levels one by one @@@
 void fetchNextPmlLevel() {
     if (!pmlFetch.active) {
         return;
@@ -103,8 +106,7 @@ void fetchNextPmlLevel() {
         return;
     }
 
-    // Rate-Limit Check:
-    // If 3 or more consecutive level requests fail, stop fetching immediately to prevent temp-ban
+    // Rate-Limit Check: If 3 or more consecutive requests fail, stop fetching immediately to prevent temp-ban
     if (pmlFetch.consecutive_failures >= 3) {
         pmlFetch.active = false;
         removeLoadingCircles(cocos2d::CCDirector::sharedDirector()->getRunningScene());
@@ -119,7 +121,7 @@ void fetchNextPmlLevel() {
         return;
     }
 
-    // Finished processing the 10 levels on the current page. Assemble and render.
+    // Display the levels onto the page after they are finished
     if (pmlFetch.current_index >= pmlFetch.expected_ids.size()) {
         pmlFetch.active = false;
         pmlFetch.delivering = true;
@@ -137,20 +139,20 @@ void fetchNextPmlLevel() {
             FLAlertLayer::create("Warning", "No levels on this page loaded from the servers.", "OK")->show();
         }
 
-        // Send levels directly to browser view layout
+        // Send levels directly to level view
         activeBrowser->setupLevelBrowser(final_array);
         
-        // Dynamically fade any LoadingCircles
+        // Remove any LoadingCircles
         removeLoadingCircles(cocos2d::CCDirector::sharedDirector()->getRunningScene());
         return;
     }
 
     int levelId = pmlFetch.expected_ids[pmlFetch.current_index];
-
+    // @@@
     auto singleSearch = GJSearchObject::create(SearchType::Search, std::to_string(levelId));
-    singleSearch->retain(); // Keep search object alive during our staggered delay
+    singleSearch->retain(); // Keep search object alive
 
-    // Limit requests by 1.0 seconds to keep Rob's servers happy :)
+    // Limit requests by 1.0 seconds to keep Rob's servers happy :) [hopefully]
     PMLDelayHandler::sched_delay(1.0f, [singleSearch, levelId]() {
         if (pmlFetch.active) {
             GameLevelManager::sharedState()->getOnlineLevels(singleSearch);
@@ -161,7 +163,7 @@ void fetchNextPmlLevel() {
 
 class $modify(MyGameLevelManager, GameLevelManager) {
     void getOnlineLevels(GJSearchObject* searchObj) {
-
+        // @@@
         if (searchObj && searchObj->m_searchType == static_cast<SearchType>(19) && !pmlFetch.active) {
             resetPmlFetch();
 
@@ -217,7 +219,6 @@ class $modify(MyLevelBrowserLayer, LevelBrowserLayer) {
     void onEnter() {
         LevelBrowserLayer::onEnter();
 
-        // Kick off loading
         if (pmlFetch.active && pmlFetch.current_index == 0) {
             fetchNextPmlLevel();
         }
@@ -249,7 +250,7 @@ class $modify(MyLevelBrowserLayer, LevelBrowserLayer) {
                         }
                     }
 
-                    // Fallback check
+                    // Fallback check @@@
                     if (!matchedLvl) {
                         for (int i = 0; i < levels->count(); ++i) {
                             auto lvl = static_cast<GJGameLevel*>(levels->objectAtIndex(i));
@@ -285,7 +286,7 @@ class $modify(MyLevelBrowserLayer, LevelBrowserLayer) {
         LevelBrowserLayer::loadLevelsFinished(levels, key, p2);
     }
 
-    void loadLevelsFailed(char const* key, int errorCode) {
+    void loadLevelsFailed(char const* key, int errorCode) { // @@@
         if (pmlFetch.active) {
             int failedId = pmlFetch.expected_ids[pmlFetch.current_index];
             std::string keyStr = key ? key : "";
@@ -331,12 +332,13 @@ class $modify(MyLevelBrowserLayer, LevelBrowserLayer) {
     }
 };
 
-void PracticeModeList::loadPracticeList(
+void PracticeModeList::loadPracticeList( // @@@
     TaskHolder<web::WebResponse>& listener,
     Function<void()> success,
     CopyableFunction<void(int)> failure
 ) {
     listener.spawn(
+        // Fetch JSON data from requested URL
         web::WebRequest().get(currentListUrl),
         [failure = std::move(failure), success = std::move(success)](web::WebResponse answer) mutable {
             if (!answer.ok()) {
@@ -405,7 +407,7 @@ void PracticeModeList::loadPracticeList(
     );
 }
 
-// Add PML list-search buttons to the Creator Layer
+// Add PML list buttons to the Creator Layer
 class $modify(MyCreatorLayer, CreatorLayer) {
     struct Fields {
         TaskHolder<web::WebResponse> m_listener;
@@ -452,7 +454,7 @@ class $modify(MyCreatorLayer, CreatorLayer) {
         this->startPmlLoadingSequence();
     }
 
-    void startPmlLoadingSequence() {
+    void startPmlLoadingSequence() { // @@@
         auto loading = LoadingCircle::create();
         loading->setParent(CCDirector::sharedDirector()->getRunningScene());
         loading->show();
@@ -480,7 +482,7 @@ class $modify(MyCreatorLayer, CreatorLayer) {
         );
     }
 
-    void launchLevelBrowser() {
+    void launchLevelBrowser() { // @@@
         std::string searchQuery = "";
         for (size_t idx = 0; idx < PracticeModeList::levels.size(); ++idx) {
             searchQuery += std::to_string(PracticeModeList::levels[idx].id);
@@ -489,7 +491,7 @@ class $modify(MyCreatorLayer, CreatorLayer) {
             }
         }
 
-        auto searchObj = GJSearchObject::create(static_cast<SearchType>(19), searchQuery);
+        auto searchObj = GJSearchObject::create(static_cast<SearchType>(19), searchQuery); // @@@
         auto browserLayer = LevelBrowserLayer::create(searchObj);
         auto scene = CCScene::create();
         scene->addChild(browserLayer);

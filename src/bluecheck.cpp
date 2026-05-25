@@ -1,17 +1,19 @@
 #include <Geode/Geode.hpp>
 #include <Geode/modify/LevelCell.hpp>
 
+// NOTE: The following code features AI-assisted code. Any code with AI-assistance will be marked with @@@
+
 using namespace geode::prelude;
 
 class $modify(MyLevelCell, LevelCell) {
     void loadFromLevel(GJGameLevel* level) {
-        // Safe check to ensure check logic is only on levels
+        // Check to ensure check logic is only on levels
         if (!level) {
             LevelCell::loadFromLevel(level);
             return;
         }
 
-        // Clean up previous blue checkmarks/labels
+        // Clean up previous blue checkmarks/labels @@@
         if (auto oldCheck = this->getChildByID("blue-checkmark-pml")) {
             oldCheck->removeFromParentAndCleanup(true);
         }
@@ -47,8 +49,7 @@ class $modify(MyLevelCell, LevelCell) {
 
         if (checkmark) {
             if (isNormalBeaten) {
-                // Keep green color if beaten in Normal Mode
-                checkmark->setColor({ 255, 255, 255 }); // Clear any color tint
+                // Probably useless, but better safe than sorry
                 checkmark->setVisible(true);
             } 
             else if (isPracticeBeaten) {
@@ -56,12 +57,11 @@ class $modify(MyLevelCell, LevelCell) {
                 auto newCheck = CCSprite::create("practicecomplete.png"_spr);
                 if (newCheck) {
                     checkmark->setDisplayFrame(newCheck->displayFrame());
-                    checkmark->setColor({ 255, 255, 255 }); // Clear tint so the true colors shine
                     checkmark->setVisible(true);
                 }
             }
         } 
-        else if (!isNormalBeaten) {
+        else if (!isNormalBeaten) { // @@@
             // Decide whether to spawn a Checkmark (100%), Progress Label (1-99%), or nothing (0%)
             CCNode* pmlNode = nullptr;
 
@@ -69,9 +69,8 @@ class $modify(MyLevelCell, LevelCell) {
                 // Game skipped green checkmark because Normal Mode is not 100%
                 auto newCheckmark = CCSprite::create("practicecomplete.png"_spr);
                 if (newCheckmark) {
-                    newCheckmark->setColor({ 255, 255, 255 }); // Raw texture coloring
-                    newCheckmark->setScale(0.17f); // Proportional high-resolution scale
-                    newCheckmark->setID("blue-checkmark-pml"); // Unique ID for safe recycling sanitization
+                    newCheckmark->setScale(0.17f); // Downsize because texture is big
+                    newCheckmark->setID("blue-checkmark-pml");
                     pmlNode = newCheckmark;
                 }
             }
@@ -98,7 +97,7 @@ class $modify(MyLevelCell, LevelCell) {
                     percentLabel = static_cast<CCLabelBMFont*>(container->getChildByID("percentage-label"));
                 }
                 
-                // Look recursively if getChildByID happens to fail on dynamic layouts
+                // If label isn't found, look recursively for it
                 if (!nameLabel) {
                     this->findLabelByID(container, "level-name", nameLabel);
                 }
@@ -106,7 +105,7 @@ class $modify(MyLevelCell, LevelCell) {
                     this->findLabelByID(container, "percentage-label", percentLabel);
                 }
 
-                // Decide which label to align next to
+                // Decide which label to align to
                 CCLabelBMFont* targetLabel = nullptr;
                 if (percentLabel && percentLabel->isVisible()) {
                     targetLabel = percentLabel;
@@ -128,7 +127,7 @@ class $modify(MyLevelCell, LevelCell) {
                     
                     y = targetLabel->getPositionY() + (0.5f - anchorY) * labelHeight;
                 } else {
-                    // Safe fallback if no labels are identified
+                    // Fallback if no labels are identified
                     float cellWidth = this->getContentSize().width;
                     float cellHeight = this->getContentSize().height;
                     
@@ -147,8 +146,8 @@ class $modify(MyLevelCell, LevelCell) {
         }
     }
 
-private:
-    // Helper function to find the checkmark sprite inside LevelCell children recursively
+private: // @@@
+    // Finding the checkmark sprite
     void findCheckmarkSprite(cocos2d::CCNode* parent, cocos2d::CCSprite*& checkmarkOut) {
         if (!parent || checkmarkOut) return;
 
@@ -162,7 +161,6 @@ private:
             if (!child) continue;
 
             if (auto sprite = dynamic_cast<CCSprite*>(child)) {
-                // Safely compare the sprite's active display frame with the cached checkmark frame
                 if (targetFrame && sprite->displayFrame() == targetFrame) {
                     // Avoid confusing with buttons or other UI elements
                     if (!dynamic_cast<CCMenuItem*>(sprite->getParent())) {
