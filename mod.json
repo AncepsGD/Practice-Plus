@@ -40,7 +40,7 @@
 
   "settings": {
     "custom-checkpoints-enabled": {
-      "name": "Custom Checkpoints (partially working)",
+      "name": "Custom Checkpoints",
       "description": "Enable custom checkpoint visuals in practice mode.",
       "type": "bool",
       "default": true
