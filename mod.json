@@ -103,33 +103,6 @@
       "default": "#FFFFFF"
     },
 
-    "checkpoint-fade-enabled": {
-      "name": "Checkpoint Fade",
-      "description": "Each successive checkpoint placed becomes more transparent.",
-      "type": "bool",
-      "default": false
-    },
-
-    "checkpoint-fade-step": {
-      "name": "Fade Step",
-      "description": "How much opacity is reduced per checkpoint placement.",
-      "type": "int",
-      "default": 30,
-
-      "min": 1,
-      "max": 255
-    },
-
-    "checkpoint-fade-min": {
-      "name": "Minimum Fade Opacity",
-      "description": "Opacity floor — checkpoints will never go below this value.",
-      "type": "int",
-      "default": 20,
-
-      "min": 0,
-      "max": 255
-    },
-
     "checkpoint-fadein-enabled": {
       "name": "Fade-In on Placement",
       "description": "Checkpoints fade in from transparent when placed.",
@@ -149,7 +122,7 @@
 
     "checkpoint-image": {
       "name": "Custom Checkpoint Image",
-      "description": "Optional custom image for checkpoints. When set, the checkpoint uses only this image and does not apply recoloring.",
+      "description": "Optional custom image for checkpoints.",
       "type": "file",
       "default": "",
       "control": {
@@ -207,24 +180,17 @@
 
     "practice-respawn-time-enabled": {
       "name": "Custom Practice Respawn Time",
-      "description": "Add a delay before respawning from a checkpoint in practice mode.",
+      "description": "Customize the delay before respawning from a checkpoint in practice mode.",
       "type": "bool",
       "default": false
     },
     "practice-respawn-time": {
-      "name": "Respawn Delay (seconds)",
+      "name": "Respawn Delay (Seconds)",
       "description": "How long to wait after death before loading the checkpoint.",
       "type": "float",
       "default": 1.0,
       "min": 0.0,
       "max": 10.0
-    },
-
-    "blue-check-enabled": {
-      "name": "Blue Practice Completion",
-      "description": "Show practice completion checkmarks and percentages. (will expand later)",
-      "type": "bool",
-      "default": true
     }
   },
 
