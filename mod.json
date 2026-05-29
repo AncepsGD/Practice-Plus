@@ -103,23 +103,6 @@
       "default": "#FFFFFF"
     },
 
-    "checkpoint-rainbow-enabled": {
-      "name": "Rainbow Mode",
-      "description": "Each checkpoint placed gets the next color in the rainbow sequence.",
-      "type": "bool",
-      "default": false
-    },
-
-    "checkpoint-rainbow-speed": {
-      "name": "Rainbow Speed",
-      "description": "Speed of rainbow color cycling.",
-      "type": "float",
-      "default": 1.0,
-
-      "min": 0.1,
-      "max": 10.0
-    },
-
     "checkpoint-fade-enabled": {
       "name": "Checkpoint Fade",
       "description": "Each successive checkpoint placed becomes more transparent.",
