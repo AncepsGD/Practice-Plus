@@ -1,22 +1,249 @@
 {
-	"geode": "5.5.3",
-	"gd": {
-		"win": "2.2081",
-		"android": "2.2081",
-		"mac": "2.2081",
-		"ios": "2.2081"
-	},
-	"id": "anceps.practiceplus",
-	"name": "Practice+",
-	"version": "v1.0.0-alpha.3",
-	"developers": ["Anceps, Vanouper"],
-	"description": "Expand Practice like never before :)",
-	"dependencies": {
-		"geode.node-ids": ">=v1.23.3"
-	},
-	"resources": {
-		"sprites": [
-			"resources/*.png"
-		]
-	}
+  "geode": "5.5.3",
+  "gd": {
+    "win": "2.2081",
+    "android": "2.2081",
+    "mac": "2.2081",
+    "ios": "2.2081"
+  },
+  "id": "anceps.practiceplus",
+  "name": "Practice+",
+  "version": "v1.0.0-alpha.4",
+  "developers": ["Anceps, Vanouper"],
+  "description": "Expand Practice like never before :)",
+
+  "dependencies": {
+    "hiimjasmine00.optional_settings": ">=v2.0.0",
+    "geode.node-ids": ">=v1.23.3"
+  },
+
+  "resources": {
+    "sprites": ["resources/*.png"],
+
+    "files": [
+      "resources/checkpoint_circle_outer.png",
+      "resources/checkpoint_circle_inner.png",
+
+      "resources/checkpoint_square_outer.png",
+      "resources/checkpoint_square_inner.png",
+
+      "resources/checkpoint_x_outer.png",
+      "resources/checkpoint_x_inner.png",
+
+      "resources/checkpoint_diamond_outer.png",
+      "resources/checkpoint_diamond_inner.png",
+
+      "resources/checkpoint_place_sfx.ogg",
+      "resources/checkpoint_remove_sfx.ogg"
+    ]
+  },
+
+  "settings": {
+    "custom-checkpoints-enabled": {
+      "name": "Custom Checkpoints (partially working)",
+      "description": "Enable custom checkpoint visuals in practice mode.",
+      "type": "bool",
+      "default": true
+    },
+
+    "checkpoint-shape": {
+      "name": "Checkpoint Shape",
+      "description": "Shape used for custom checkpoints.",
+      "type": "string",
+      "default": "diamond",
+
+      "one-of": ["diamond", "circle", "square", "x"]
+    },
+
+    "checkpoint-scale": {
+      "name": "Checkpoint Scale",
+      "description": "Scale factor for checkpoint visuals.",
+      "type": "float",
+      "default": 1.0,
+
+      "min": 0.25,
+      "max": 4.0
+    },
+
+    "checkpoint-opacity": {
+      "name": "Checkpoint Opacity",
+      "description": "Opacity of custom checkpoint visuals.",
+      "type": "int",
+      "default": 255,
+
+      "min": 25,
+      "max": 255
+    },
+
+    "checkpoint-outer-color-enabled": {
+      "name": "Custom Outer Color",
+      "description": "Use a custom color for the outer checkpoint.",
+      "type": "bool",
+      "default": false
+    },
+
+    "checkpoint-outer-color": {
+      "name": "Outer Checkpoint Color",
+      "description": "RGB color for the outer checkpoint.",
+      "type": "color",
+      "default": "#00FFFF"
+    },
+
+    "checkpoint-inner-color-enabled": {
+      "name": "Custom Inner Color",
+      "description": "Use a custom color for the inner checkpoint.",
+      "type": "bool",
+      "default": false
+    },
+
+    "checkpoint-inner-color": {
+      "name": "Inner Checkpoint Color",
+      "description": "RGB color for the inner checkpoint.",
+      "type": "color",
+      "default": "#FFFFFF"
+    },
+
+    "checkpoint-rainbow-enabled": {
+      "name": "Rainbow Mode",
+      "description": "Each checkpoint placed gets the next color in the rainbow sequence.",
+      "type": "bool",
+      "default": false
+    },
+
+    "checkpoint-rainbow-speed": {
+      "name": "Rainbow Speed",
+      "description": "Speed of rainbow color cycling.",
+      "type": "float",
+      "default": 1.0,
+
+      "min": 0.1,
+      "max": 10.0
+    },
+
+    "checkpoint-fade-enabled": {
+      "name": "Checkpoint Fade",
+      "description": "Each successive checkpoint placed becomes more transparent.",
+      "type": "bool",
+      "default": false
+    },
+
+    "checkpoint-fade-step": {
+      "name": "Fade Step",
+      "description": "How much opacity is reduced per checkpoint placement.",
+      "type": "int",
+      "default": 30,
+
+      "min": 1,
+      "max": 255
+    },
+
+    "checkpoint-fade-min": {
+      "name": "Minimum Fade Opacity",
+      "description": "Opacity floor — checkpoints will never go below this value.",
+      "type": "int",
+      "default": 20,
+
+      "min": 0,
+      "max": 255
+    },
+
+    "checkpoint-fadein-enabled": {
+      "name": "Fade-In on Placement",
+      "description": "Checkpoints fade in from transparent when placed.",
+      "type": "bool",
+      "default": false
+    },
+
+    "checkpoint-fadein-duration": {
+      "name": "Fade-In Duration",
+      "description": "How long the fade-in animation takes in seconds.",
+      "type": "float",
+      "default": 0.4,
+
+      "min": 0.05,
+      "max": 3.0
+    },
+
+    "checkpoint-image": {
+      "name": "Custom Checkpoint Image",
+      "description": "Optional custom image for checkpoints. When set, the checkpoint uses only this image and does not apply recoloring.",
+      "type": "file",
+      "default": "",
+      "control": {
+        "dialog": "open",
+        "filters": [
+          {
+            "files": ["*.png", "*.jpg", "*.jpeg", "*.webp", "*.bmp"],
+            "description": "Image files"
+          }
+        ]
+      }
+    },
+
+    "checkpoint-sfx-path": {
+      "name": "Checkpoint Place Sound",
+      "description": "Path to the checkpoint placement sound.",
+      "type": "file",
+      "default": "{mod_resources_dir}/checkpoint_place_sfx.ogg"
+    },
+    "checkpoint-remove-sfx-path": {
+      "name": "Checkpoint Remove Sound",
+      "description": "Path to the checkpoint removal sound.",
+      "type": "file",
+      "default": "{mod_resources_dir}/checkpoint_remove_sfx.ogg"
+    },
+
+    "checkpoint-limit": {
+      "name": "Checkpoint Limit",
+      "description": "Maximum number of practice checkpoints.",
+      "type": "custom:hiimjasmine00.optional_settings/optional-int",
+      "default": 5,
+      "default-enabled": false
+    },
+
+    "checkpoint-restriction": {
+      "name": "Ignore Restrictions",
+      "description": "Ignore the game's checkpoint placement restrictions.",
+      "type": "bool",
+      "default": true
+    },
+
+    "practice-coins-enabled": {
+      "name": "Practice Coins",
+      "description": "Allow coins to be collected in practice mode.",
+      "type": "bool",
+      "default": false
+    },
+
+    "checkpoint-behind-player": {
+      "name": "Checkpoints Behind Player",
+      "description": "Render practice checkpoints behind the player.",
+      "type": "bool",
+      "default": true
+    },
+
+    "practice-respawn-time-enabled": {
+      "name": "Custom Practice Respawn Time",
+      "description": "Add a delay before respawning from a checkpoint in practice mode.",
+      "type": "bool",
+      "default": false
+    },
+    "practice-respawn-time": {
+      "name": "Respawn Delay (seconds)",
+      "description": "How long to wait after death before loading the checkpoint.",
+      "type": "float",
+      "default": 1.0,
+      "min": 0.0,
+      "max": 10.0
+    },
+
+    "blue-check-enabled": {
+      "name": "Blue Practice Completion",
+      "description": "Show practice completion checkmarks and percentages. (will expand later)",
+      "type": "bool",
+      "default": true
+    }
+  },
+
+  "tags": ["customization", "enhancement", "gameplay", "offline"]
 }
