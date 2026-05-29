@@ -1,0 +1,55 @@
+#include <Geode/Geode.hpp>
+#include <Geode/modify/GJBaseGameLayer.hpp>
+
+using namespace geode::prelude;
+
+class $modify(CheckpointFeaturesGameLayer, GJBaseGameLayer) {
+    void collisionCheckObjects(
+        PlayerObject* player,
+        gd::vector<GameObject*>* sectionObjects,
+        int objectCount,
+        float dt)
+    {
+        if (!m_isPracticeMode) {
+            return GJBaseGameLayer::collisionCheckObjects(player, sectionObjects, objectCount, dt);
+        }
+
+        bool practiceCoins = Mod::get()->getSettingValue<bool>("practice-coins");
+        if (!practiceCoins) {
+            return GJBaseGameLayer::collisionCheckObjects(player, sectionObjects, objectCount, dt);
+        }
+
+        auto playerRect = player->getObjectRect();
+
+        for (int i = 0; i < objectCount; i++) {
+            auto* obj = sectionObjects->at(i);
+
+            if (
+                obj->m_objectType != GameObjectType::SecretCoin &&
+                obj->m_objectType != GameObjectType::UserCoin)
+            {
+                continue;
+            }
+
+            auto* effectSprite = typeinfo_cast<EffectGameObject*>(obj);
+            if (!effectSprite) {
+                continue;
+            }
+
+            if (effectSprite->getOpacity() == 0) {
+                continue;
+            }
+
+            auto objectRect = effectSprite->getObjectRect();
+            if (!playerRect.intersectsRect(objectRect)) {
+                continue;
+            }
+
+            effectSprite->EffectGameObject::triggerObject(this, player->m_uniqueID, nullptr);
+            GJBaseGameLayer::destroyObject(effectSprite);
+            GJBaseGameLayer::gameEventTriggered(GJGameEvent::UserCoin, 0, 0);
+        }
+
+        GJBaseGameLayer::collisionCheckObjects(player, sectionObjects, objectCount, dt);
+    }
+};

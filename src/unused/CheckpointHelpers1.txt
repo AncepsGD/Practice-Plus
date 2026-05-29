@@ -1,0 +1,212 @@
+#include "CheckpointHelpers.hpp"
+
+#include <Geode/Geode.hpp>
+
+#include <algorithm>
+#include <cctype>
+#include <cmath>
+#include <unordered_map>
+
+using namespace geode::prelude;
+
+namespace checkpoint_mod
+{
+    namespace
+    {
+        static std::unordered_map<std::string, Pack> s_cache;
+        static bool s_initialized = false;
+
+        static std::string normalizeShape(std::string value)
+        {
+            std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c)
+                           { return static_cast<char>(std::tolower(c)); });
+            return value;
+        }
+
+        static CCTexture2D *loadTexture(std::filesystem::path const &path)
+        {
+            if (path.empty())
+                return nullptr;
+
+            auto const str = path.string();
+            if (str.empty())
+                return nullptr;
+
+                // Try original path first
+                if (auto tex = CCTextureCache::sharedTextureCache()->addImage(str.c_str(), false)) {
+                    return tex;
+                }
+
+                // Try filename only (some platforms / loaders resolve relative names)
+                auto filename = path.filename().string();
+                if (!filename.empty()) {
+                    if (auto tex2 = CCTextureCache::sharedTextureCache()->addImage(filename.c_str(), false)) {
+                        return tex2;
+                    }
+                }
+
+                // Try normalized forward-slash path
+                std::string forward = str;
+                std::replace(forward.begin(), forward.end(), '\\', '/');
+                if (forward != str) {
+                    if (auto tex3 = CCTextureCache::sharedTextureCache()->addImage(forward.c_str(), false)) {
+                        return tex3;
+                    }
+                }
+
+                return nullptr;
+        }
+
+        static void loadPack(std::string const &key, std::filesystem::path const &outer, std::filesystem::path const &inner)
+        {
+            auto const resources = Mod::get()->getResourcesDir();
+            s_cache.emplace(key, Pack{
+                                     loadTexture(resources / outer),
+                                     loadTexture(resources / inner)});
+        }
+
+        static void ensureInitialized()
+        {
+            if (s_initialized)
+                return;
+
+            loadPack("circle", "checkpoint_circle_outer.png"_spr, "checkpoint_circle_inner.png"_spr);
+            loadPack("square", "checkpoint_square_outer.png"_spr, "checkpoint_square_inner.png"_spr);
+            loadPack("hexagon", "checkpoint_hexagon_outer.png"_spr, "checkpoint_hexagon_inner.png"_spr);
+            loadPack("diamond", "checkpoint_diamond_outer.png"_spr, "checkpoint_diamond_inner.png"_spr);
+
+            s_initialized = true;
+        }
+
+    }
+
+    Pack const &getPack(std::string const &key)
+    {
+        ensureInitialized();
+
+        auto it = s_cache.find(key);
+        if (it != s_cache.end())
+        {
+            return it->second;
+        }
+
+        auto fallback = s_cache.find("diamond");
+        if (fallback != s_cache.end())
+        {
+            return fallback->second;
+        }
+
+        static Pack empty{};
+        return empty;
+    }
+
+    CheckpointStyle getStyle()
+    {
+        auto mod = Mod::get();
+
+        auto shape = normalizeShape(mod->getSettingValue<std::string>("checkpoint-shape"));
+        if (s_cache.find(shape) == s_cache.end())
+        {
+            shape = "diamond";
+        }
+
+        auto scale = static_cast<float>(mod->getSettingValue<double>("checkpoint-scale"));
+        if (!std::isfinite(scale) || scale <= 0.f)
+        {
+            scale = 1.f;
+        }
+
+        CheckpointStyle style;
+        style.shape = std::move(shape);
+        style.outerColor = mod->getSettingValue<ccColor3B>("outer-color");
+        style.innerColor = mod->getSettingValue<ccColor3B>("starting-color");
+        style.scale = std::clamp(scale, 0.05f, 10.f);
+
+        return style;
+    }
+
+    ccColor3B getInnerColorFromCheckpoint(CheckpointObject *checkpoint, ccColor3B fallback)
+    {
+        if (!checkpoint || !checkpoint->m_physicalCheckpointObject)
+        {
+            return fallback;
+        }
+
+        auto node = typeinfo_cast<GameObject *>(checkpoint->m_physicalCheckpointObject);
+        if (!node)
+        {
+            return fallback;
+        }
+
+        auto outer = node->getChildByID(OuterId);
+        if (!outer)
+        {
+            outer = node->getChildByID("outer");
+        }
+
+        if (!outer)
+        {
+            return fallback;
+        }
+
+        auto inner = outer->getChildByID(InnerId);
+        if (!inner)
+        {
+            inner = outer->getChildByID("inner");
+        }
+
+        if (!inner)
+        {
+            return fallback;
+        }
+
+        if (auto sprite = typeinfo_cast<CCSprite *>(inner))
+        {
+            return sprite->getColor();
+        }
+
+        return fallback;
+    }
+
+    CCTexture2D *transparentTexture()
+    {
+        static CCTexture2D *texture = nullptr;
+        if (texture)
+        {
+            return texture;
+        }
+
+        auto render = CCRenderTexture::create(1, 1);
+        if (!render)
+        {
+            return nullptr;
+        }
+
+        render->beginWithClear(0, 0, 0, 0);
+        render->end();
+
+        auto sprite = render->getSprite();
+        if (!sprite)
+        {
+            return nullptr;
+        }
+
+        texture = sprite->getTexture();
+        if (texture)
+        {
+            texture->retain();
+        }
+
+        return texture;
+    }
+
+    CCSprite *spriteFromTexture(CCTexture2D *texture)
+    {
+        if (!texture)
+        {
+            return nullptr;
+        }
+
+        return CCSprite::createWithTexture(texture);
+    }
+}

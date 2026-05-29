@@ -6,10 +6,10 @@
 		"mac": "2.2081",
 		"ios": "2.2081"
 	},
-	"id": "vanouper.practiceplus",
+	"id": "anceps.practiceplus",
 	"name": "Practice+",
-	"version": "v1.0.0-alpha.2",
-	"developer": "Vanouper",
+	"version": "v1.0.0-alpha.3",
+	"developers": ["Anceps, Vanouper"],
 	"description": "Expand Practice like never before :)",
 	"dependencies": {
 		"geode.node-ids": ">=v1.23.3"

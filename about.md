@@ -1,22 +1,27 @@
 # Practice+
 
-Don't celebrate normal mode completions, celebrate Practice Mode! Practice+ completely overhauls Practice Mode in Geometry Dash, transforming it into a full parallel progression system that parallels Normal Mode.
+Don't celebrate normal mode completions, celebrate Practice Mode! Practice+ overhauls Practice Mode in Geometry Dash :)
 
 Features:
 
 Practice Checkmarks & Percent (show both practice and normal completions / progress) [Blue Checkmarks!]
 
-- No more hiding Practice Mode Completions. Beating a level in Practice Mode now displays a custom Blue Checkmark on the level. Beating a level in normal mode then converts to the standard green check everybody knows and loves :)
+- Beating a level in Practice Mode now displays a custom Blue Checkmark on the level. Beating a level in normal mode then converts to the standard green check.
 
-- Keeps track of practice runs with custom practice percentage labels rendered directly on levels.
+- Keep track of practice runs with custom practice (blue) percentages.
 
 Practice Mode List Integration (PML)
 
 - View the official Practice Mode List by Anceps.
 
-This mod would not exist without AncepsGD and the Practice Mode List community.
+Custom Checkpoints
 
-ISSUES:
-- AI-boilerplate templates are still in use (plan to eliminate that)
-- General spaghetti code
-- another issue I'm missing
+- Customize checkpoints like never before.
+
+- Checkpoint SFX
+
+- Custom Checkpoint Sprites
+
+- etc.
+
+This mod would not exist without AncepsGD and the Practice Mode List community.

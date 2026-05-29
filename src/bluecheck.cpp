@@ -1,19 +1,15 @@
 #include <Geode/Geode.hpp>
 #include <Geode/modify/LevelCell.hpp>
 
-// NOTE: The following code features AI-assisted code. Any code with AI-assistance will be marked with @@@
-
 using namespace geode::prelude;
 
 class $modify(MyLevelCell, LevelCell) {
     void loadFromLevel(GJGameLevel* level) {
-        // Check to ensure check logic is only on levels
         if (!level) {
             LevelCell::loadFromLevel(level);
             return;
         }
 
-        // Clean up previous blue checkmarks/labels @@@
         if (auto oldCheck = this->getChildByID("blue-checkmark-pml")) {
             oldCheck->removeFromParentAndCleanup(true);
         }
@@ -27,10 +23,11 @@ class $modify(MyLevelCell, LevelCell) {
 
         bool isNormalBeaten = (level->m_normalPercent == 100);
         int practicePercent = level->m_practicePercent;
-
+        
         auto glm = GameLevelManager::sharedState();
         if (glm) {
-            auto savedLevel = glm->getSavedLevel(level->m_levelID.value());
+
+            auto savedLevel = glm->getSavedLevel(level->m_levelID);
             if (savedLevel) {
                 if (savedLevel->m_normalPercent == 100) {
                     isNormalBeaten = true;
@@ -43,38 +40,30 @@ class $modify(MyLevelCell, LevelCell) {
 
         bool isPracticeBeaten = (practicePercent == 100);
 
-        // Search if level has green checkmark
-        CCSprite* checkmark = nullptr;
-        this->findCheckmarkSprite(this, checkmark);
+        auto checkmark = typeinfo_cast<CCSprite*>(this->getChildByIDRecursive("completed-icon"));
 
         if (checkmark) {
             if (isNormalBeaten) {
-                // Probably useless, but better safe than sorry
                 checkmark->setVisible(true);
-            } 
-            else if (isPracticeBeaten) {
-                // Use custom practice check texture
+            } else if (isPracticeBeaten) {
                 auto newCheck = CCSprite::create("practicecomplete.png"_spr);
                 if (newCheck) {
-                    checkmark->setDisplayFrame(newCheck->displayFrame());
+                    checkmark->setTexture(newCheck->getTexture());
+                    checkmark->setTextureRect(CCRect(0, 0, newCheck->getContentSize().width, newCheck->getContentSize().height));
                     checkmark->setVisible(true);
                 }
             }
-        } 
-        else if (!isNormalBeaten) { // @@@
-            // Decide whether to spawn a Checkmark (100%), Progress Label (1-99%), or nothing (0%)
+        } else if (!isNormalBeaten) {
             CCNode* pmlNode = nullptr;
 
             if (isPracticeBeaten) {
-                // Game skipped green checkmark because Normal Mode is not 100%
                 auto newCheckmark = CCSprite::create("practicecomplete.png"_spr);
                 if (newCheckmark) {
-                    newCheckmark->setScale(0.17f); // Downsize because texture is big
+                    newCheckmark->setScale(0.17f);
                     newCheckmark->setID("blue-checkmark-pml");
                     pmlNode = newCheckmark;
                 }
-            }
-            else if (practicePercent > 0 && practicePercent < 100) {
+            } else if (practicePercent > 0 && practicePercent < 100) {
                 std::string labelText = fmt::format("{}%", practicePercent);
                 auto newPercentLabel = CCLabelBMFont::create(labelText.c_str(), "bigFont.fnt");
                 if (newPercentLabel) {
@@ -88,24 +77,14 @@ class $modify(MyLevelCell, LevelCell) {
             if (pmlNode) {
                 auto container = m_mainLayer ? static_cast<CCNode*>(m_mainLayer) : static_cast<CCNode*>(this);
                 
-                // Identify dynamic label components via DevTools
                 CCLabelBMFont* nameLabel = nullptr;
                 CCLabelBMFont* percentLabel = nullptr;
-                
+
                 if (container) {
-                    nameLabel = static_cast<CCLabelBMFont*>(container->getChildByID("level-name"));
-                    percentLabel = static_cast<CCLabelBMFont*>(container->getChildByID("percentage-label"));
-                }
-                
-                // If label isn't found, look recursively for it
-                if (!nameLabel) {
-                    this->findLabelByID(container, "level-name", nameLabel);
-                }
-                if (!percentLabel) {
-                    this->findLabelByID(container, "percentage-label", percentLabel);
+                    nameLabel = typeinfo_cast<CCLabelBMFont*>(container->getChildByIDRecursive("level-name"));
+                    percentLabel = typeinfo_cast<CCLabelBMFont*>(container->getChildByIDRecursive("percentage-label"));
                 }
 
-                // Decide which label to align to
                 CCLabelBMFont* targetLabel = nullptr;
                 if (percentLabel && percentLabel->isVisible()) {
                     targetLabel = percentLabel;
@@ -119,77 +98,23 @@ class $modify(MyLevelCell, LevelCell) {
                 if (targetLabel) {
                     float anchorX = targetLabel->getAnchorPoint().x;
                     float anchorY = targetLabel->getAnchorPoint().y;
-                    
                     float labelWidth = targetLabel->getContentSize().width * targetLabel->getScale();
                     float labelHeight = targetLabel->getContentSize().height * targetLabel->getScale();
-
-                    x = targetLabel->getPositionX() + (1.0f - anchorX) * labelWidth + 18.0f;
                     
+                    x = targetLabel->getPositionX() + (1.0f - anchorX) * labelWidth + 18.0f;
                     y = targetLabel->getPositionY() + (0.5f - anchorY) * labelHeight;
                 } else {
-                    // Fallback if no labels are identified
                     float cellWidth = this->getContentSize().width;
                     float cellHeight = this->getContentSize().height;
-                    
                     if (cellWidth < 100.0f) cellWidth = 356.f;
                     if (cellHeight < 20.0f) cellHeight = 56.0f;
-
-                    x = cellWidth - 18.0f; 
+                    x = cellWidth - 18.0f;
                     y = cellHeight;
                 }
-                
+
                 pmlNode->setPosition({ x, y });
-                
-                // Use high Z-order to guarantee it renders on top of UI
                 container->addChild(pmlNode, 10);
             }
-        }
-    }
-
-private: // @@@
-    // Finding the checkmark sprite
-    void findCheckmarkSprite(cocos2d::CCNode* parent, cocos2d::CCSprite*& checkmarkOut) {
-        if (!parent || checkmarkOut) return;
-
-        auto children = parent->getChildren();
-        if (!children) return;
-
-        auto targetFrame = CCSpriteFrameCache::sharedSpriteFrameCache()->spriteFrameByName("GJ_completesIcon_001.png");
-
-        for (int i = 0; i < children->count(); ++i) {
-            auto child = static_cast<cocos2d::CCNode*>(children->objectAtIndex(i));
-            if (!child) continue;
-
-            if (auto sprite = dynamic_cast<CCSprite*>(child)) {
-                if (targetFrame && sprite->displayFrame() == targetFrame) {
-                    // Avoid confusing with buttons or other UI elements
-                    if (!dynamic_cast<CCMenuItem*>(sprite->getParent())) {
-                        checkmarkOut = sprite;
-                        return;
-                    }
-                }
-            }
-            findCheckmarkSprite(child, checkmarkOut);
-        }
-    }
-
-    // Recursively look for labels matching Geode DevTools IDs
-    void findLabelByID(cocos2d::CCNode* parent, const char* labelID, CCLabelBMFont*& labelOut) {
-        if (!parent || labelOut) return;
-
-        if (auto found = dynamic_cast<CCLabelBMFont*>(parent->getChildByID(labelID))) {
-            labelOut = found;
-            return;
-        }
-
-        auto children = parent->getChildren();
-        if (!children) return;
-
-        for (int i = 0; i < children->count(); ++i) {
-            auto child = static_cast<cocos2d::CCNode*>(children->objectAtIndex(i));
-            if (!child) continue;
-
-            findLabelByID(child, labelID, labelOut);
         }
     }
 };

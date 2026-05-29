@@ -1,0 +1,37 @@
+#pragma once
+
+#include <Geode/Geode.hpp>
+#include <filesystem>
+#include <string>
+
+namespace checkpoint_mod
+{
+	using namespace geode::prelude;
+
+	inline constexpr const char *OuterId = "checkpoint-mod-outer";
+	inline constexpr const char *InnerId = "checkpoint-mod-inner";
+
+	struct CheckpointStyle
+	{
+		std::string shape;
+		ccColor3B outerColor;
+		ccColor3B innerColor;
+		float scale;
+	};
+
+	struct Pack
+	{
+		CCTexture2D *outer = nullptr;
+		CCTexture2D *inner = nullptr;
+	};
+
+	Pack const &getPack(std::string const &key);
+
+	CheckpointStyle getStyle();
+
+	ccColor3B getInnerColorFromCheckpoint(CheckpointObject *checkpoint, ccColor3B fallback);
+
+	CCTexture2D *transparentTexture();
+
+	CCSprite *spriteFromTexture(CCTexture2D *texture);
+}

@@ -16,7 +16,7 @@ struct PML {
 namespace PracticeModeList {
     extern std::vector<PML> levels;
     extern bool levelsLoaded;
-    extern std::string currentListUrl; // Tracks which file to fetch (levels.json or verifications.json)
+    extern std::string ListUrl; // Tracks which json to fetch (levels.json or verifications.json)
 
     void loadPracticeList(
         geode::async::TaskHolder<geode::utils::web::WebResponse>& listener, 

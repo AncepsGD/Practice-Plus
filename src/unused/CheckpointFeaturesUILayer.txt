@@ -1,0 +1,35 @@
+#include <Geode/Geode.hpp>
+#include <Geode/modify/UILayer.hpp>
+
+#include <cmath>
+#include <string>
+#include "CheckpointSounds.hpp"
+
+using namespace geode::prelude;
+
+class $modify(CheckpointFeaturesUILayer, UILayer) {
+    void onCheck(CCObject* sender) {
+        UILayer::onCheck(sender);
+
+        bool delayFix = Mod::get()->getSettingValue<bool>("checkpoint-delay-fix");
+        if (delayFix) {
+            auto pl = PlayLayer::get();
+            if (pl) {
+                pl->m_tryPlaceCheckpoint = false;
+                pl->markCheckpoint();
+            }
+        }
+
+        {
+            auto mod = Mod::get();
+            bool enabled = mod->getSettingValue<bool>("enable-creating-sounds");
+            auto soundPath = mod->getSettingValue<std::string>("checkpoint-sfx-path");
+            std::filesystem::path file(soundPath);
+            auto value = mod->getSettingValue<double>("sound-pitch-variance");
+            if (!std::isfinite(value) || value < 0.0) {
+                value = 0.0;
+            }
+            checkpoint_mod::playCheckpointSound(enabled, file, "checkpoint_place_sfx.ogg", static_cast<float>(value));
+        }
+    }
+};

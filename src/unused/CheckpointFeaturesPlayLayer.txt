@@ -1,0 +1,770 @@
+#include <Geode/Geode.hpp>
+#include <Geode/modify/PlayLayer.hpp>
+
+#include "CheckpointHelpers.hpp"
+#include "CheckpointSounds.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <random>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+using namespace geode::prelude;
+
+struct SavedCheckpointData {
+    ccColor3B player1Color{};
+    ccColor3B player2Color{};
+
+    float player1Rotation = 0.f;
+    float player2Rotation = 0.f;
+
+    CCPoint player1Position{};
+    CCPoint player2Position{};
+
+    bool dual = false;
+};
+
+struct CheckpointVisualTransition {
+    CCNode* node = nullptr;
+    float startOpacity = 255.f;
+    float targetOpacity = 255.f;
+    float startScale = 1.f;
+    float targetScale = 1.f;
+    float duration = 0.15f;
+    float elapsed = 0.f;
+    bool releaseWhenDone = false;
+};
+
+static std::unordered_map<std::string, SavedCheckpointData> s_savedPracticeResumeData;
+
+static bool shouldEnablePracticeFix() {
+    auto mod = Mod::get();
+
+    bool hasFix = mod->getSettingValue<bool>("bot.practicefix");
+    int practiceFixMode = static_cast<int>(mod->getSettingValue<int64_t>("bot.practice-fix-mode"));
+    int botState = static_cast<int>(mod->getSettingValue<int64_t>("bot.state"));
+
+    if (botState == 1) {
+        return practiceFixMode == 0;
+    }
+
+    return hasFix;
+}
+
+static bool shouldLayerCheckpointsBehindPlayer() {
+    return Mod::get()->getSettingValue<bool>("checkpoint-behind-player");
+}
+
+static bool shouldRemoveCloseCheckpoints() {
+    return Mod::get()->getSettingValue<bool>("remove-close-checkpoints");
+}
+
+static bool shouldMergeDuplicateCheckpoints() {
+    return Mod::get()->getSettingValue<bool>("merge-duplicate-checkpoints");
+}
+
+static bool shouldKeepCheckpointsAfterDeaths() {
+    return Mod::get()->getSettingValue<bool>("keep-checkpoints-after-deaths");
+}
+
+static double minimumCheckpointDistance() {
+    auto value = Mod::get()->getSettingValue<double>("minimum-checkpoint-distance");
+    if (!std::isfinite(value) || value < 0.0) {
+        return 0.0;
+    }
+    return value;
+}
+
+static int checkpointNumberingMode() {
+    return static_cast<int>(Mod::get()->getSettingValue<int64_t>("checkpoint-numbering-mode"));
+}
+
+static double checkpointTransitionDuration() {
+    auto value = Mod::get()->getSettingValue<double>("checkpoint-transition-duration");
+    if (!std::isfinite(value) || value < 0.0) {
+        return 0.15;
+    }
+    return value;
+}
+
+static double scaleDecayMultiplier() {
+    auto value = Mod::get()->getSettingValue<double>("scale-decay-multiplier");
+    if (!std::isfinite(value) || value <= 0.0) {
+        return 1.0;
+    }
+    return value;
+}
+
+static float removalScaleFactor() {
+    auto value = Mod::get()->getSettingValue<double>("checkpoint-removal-scale-factor");
+    if (!std::isfinite(value) || value <= 0.0) {
+        return 0.75f;
+    }
+    return static_cast<float>(value);
+}
+
+static float distanceBetween(CCPoint const& a, CCPoint const& b) {
+    float dx = a.x - b.x;
+    float dy = a.y - b.y;
+    return std::sqrt(dx * dx + dy * dy);
+}
+
+static std::string levelResumeKey(PlayLayer* pl) {
+    if (!pl || !pl->m_level) {
+        return {};
+    }
+
+    auto level = pl->m_level;
+    return std::to_string(level->m_levelID) + "|" + level->m_levelName.c_str();
+}
+
+class $modify(CheckpointFeaturesPlayLayer, PlayLayer) {
+    struct Fields {
+        std::unordered_map<CheckpointObject*, GLubyte> opacities;
+        std::unordered_map<CheckpointObject*, float> scales;
+        std::unordered_map<CheckpointObject*, SavedCheckpointData> checkpointData;
+        std::vector<CheckpointVisualTransition> transitions;
+        bool resumeRestoreQueued = false;
+        bool resumeRestoreApplied = false;
+        SavedCheckpointData resumeData{};
+        bool hasResumeData = false;
+    };
+
+    void applyOpacity(CCNode* node, GLubyte opacity) {
+        if (!node) {
+            return;
+        }
+        if (auto rgba = typeinfo_cast<CCRGBAProtocol*>(node)) {
+            rgba->setOpacity(opacity);
+        }
+    }
+
+    void applyScale(CCNode* node, float scale) {
+        if (!node) {
+            return;
+        }
+        node->setScale(scale);
+    }
+
+    void clearCheckpointCaches() {
+        m_fields->opacities.clear();
+        m_fields->scales.clear();
+        m_fields->checkpointData.clear();
+        m_fields->transitions.clear();
+        m_fields->resumeRestoreQueued = false;
+        m_fields->resumeRestoreApplied = false;
+        m_fields->hasResumeData = false;
+    }
+
+    void clearPendingRemovalTransitions() {
+        for (auto& transition : m_fields->transitions) {
+            if (transition.releaseWhenDone && transition.node) {
+                transition.node->removeFromParentAndCleanup(true);
+                transition.node->release();
+            }
+        }
+        m_fields->transitions.clear();
+    }
+
+    CCPoint checkpointPosition(CheckpointObject* checkpoint) {
+        if (!checkpoint || !checkpoint->m_physicalCheckpointObject) {
+            return {};
+        }
+
+        return checkpoint->m_physicalCheckpointObject->getPosition();
+    }
+
+    CCNode* checkpointVisualNode(CheckpointObject* checkpoint) {
+        if (!checkpoint || !checkpoint->m_physicalCheckpointObject) {
+            return nullptr;
+        }
+
+        return checkpoint->m_physicalCheckpointObject->getChildByID(checkpoint_mod::OuterId);
+    }
+
+    CCLabelBMFont* checkpointNumberLabel(CheckpointObject* checkpoint) {
+        auto outer = checkpointVisualNode(checkpoint);
+        if (!outer) {
+            return nullptr;
+        }
+        return typeinfo_cast<CCLabelBMFont*>(outer->getChildByID("checkpoint-number-label"));
+    }
+
+    CheckpointObject* lastStoredCheckpoint() {
+        if (!m_checkpointArray || m_checkpointArray->count() == 0) {
+            return nullptr;
+        }
+
+        return static_cast<CheckpointObject*>(m_checkpointArray->lastObject());
+    }
+
+    void updateCheckpointNumberLabels() {
+        if (!m_checkpointArray) {
+            return;
+        }
+
+        auto count = static_cast<int>(m_checkpointArray->count());
+        if (count <= 0) {
+            return;
+        }
+
+        bool latestFirst = checkpointNumberingMode() == 0;
+
+        for (int i = 0; i < count; ++i) {
+            auto checkpoint = static_cast<CheckpointObject*>(m_checkpointArray->objectAtIndex(i));
+            auto label = checkpointNumberLabel(checkpoint);
+            if (!label) {
+                continue;
+            }
+
+            int number = latestFirst ? (count - i) : (i + 1);
+            label->setString((std::string("#") + std::to_string(number)).c_str());
+        }
+    }
+
+    void startVisualTransition(CCNode* node, float targetOpacity, float targetScale, float duration, bool releaseWhenDone) {
+        if (!node) {
+            return;
+        }
+
+        auto it = std::find_if(
+            m_fields->transitions.begin(),
+            m_fields->transitions.end(),
+            [node](CheckpointVisualTransition const& t) { return t.node == node; });
+
+        if (it != m_fields->transitions.end()) {
+            if (it->releaseWhenDone && it->node) {
+                it->node->removeFromParentAndCleanup(true);
+                it->node->release();
+            }
+            m_fields->transitions.erase(it);
+        }
+
+        CheckpointVisualTransition transition;
+        transition.node = node;
+        transition.startScale = node->getScale();
+        transition.targetScale = targetScale;
+        transition.duration = std::max(0.01f, duration);
+        transition.elapsed = 0.f;
+        transition.releaseWhenDone = releaseWhenDone;
+
+        if (auto rgba = typeinfo_cast<CCRGBAProtocol*>(node)) {
+            transition.startOpacity = static_cast<float>(rgba->getOpacity());
+        } else {
+            transition.startOpacity = 255.f;
+        }
+        transition.targetOpacity = targetOpacity;
+
+        if (releaseWhenDone) {
+            node->retain();
+        }
+
+        m_fields->transitions.push_back(transition);
+    }
+
+    void updateVisualTransitions(float dt) {
+        if (m_fields->transitions.empty()) {
+            return;
+        }
+
+        for (auto it = m_fields->transitions.begin(); it != m_fields->transitions.end();) {
+            auto& transition = *it;
+            if (!transition.node) {
+                it = m_fields->transitions.erase(it);
+                continue;
+            }
+
+            transition.elapsed += dt;
+            float t = transition.duration <= 0.f ? 1.f : std::clamp(transition.elapsed / transition.duration, 0.f, 1.f);
+
+            float opacity = transition.startOpacity + (transition.targetOpacity - transition.startOpacity) * t;
+            float scale = transition.startScale + (transition.targetScale - transition.startScale) * t;
+
+            if (auto rgba = typeinfo_cast<CCRGBAProtocol*>(transition.node)) {
+                rgba->setOpacity(static_cast<GLubyte>(std::clamp(opacity, 0.f, 255.f)));
+            }
+            transition.node->setScale(scale);
+
+            if (t >= 1.f) {
+                if (transition.releaseWhenDone) {
+                    transition.node->removeFromParentAndCleanup(true);
+                    transition.node->release();
+                }
+                it = m_fields->transitions.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+
+    void rebuildCheckpointAppearance() {
+        if (!m_checkpointArray) {
+            return;
+        }
+
+        auto mod = Mod::get();
+        double baseOpacity = static_cast<double>(mod->getSettingValue<int64_t>("checkpoint-opacity"));
+        double opacityMultiplier = mod->getSettingValue<double>("decay-multiplier");
+        double scaleMultiplier = scaleDecayMultiplier();
+        double duration = checkpointTransitionDuration();
+
+        if (!std::isfinite(opacityMultiplier)) {
+            opacityMultiplier = 1.0;
+        }
+        if (!std::isfinite(scaleMultiplier)) {
+            scaleMultiplier = 1.0;
+        }
+
+        int pos = static_cast<int>(m_checkpointArray->count());
+
+        for (auto checkpoint : CCArrayExt<CheckpointObject*>(m_checkpointArray)) {
+            if (!checkpoint || !checkpoint->m_physicalCheckpointObject) {
+                --pos;
+                continue;
+            }
+
+            --pos;
+
+            auto outer = checkpointVisualNode(checkpoint);
+            if (!outer) {
+                continue;
+            }
+
+            auto targetOpacity = static_cast<GLubyte>(
+                std::clamp(
+                    static_cast<int>(std::ceil(baseOpacity * std::pow(opacityMultiplier, pos))),
+                    0,
+                    255));
+
+            auto style = checkpoint_mod::getStyle();
+            float targetScale = static_cast<float>(std::max(0.05, static_cast<double>(style.scale) * std::pow(scaleMultiplier, pos)));
+
+            startVisualTransition(outer, static_cast<float>(targetOpacity), targetScale, static_cast<float>(duration), false);
+            m_fields->opacities[checkpoint] = targetOpacity;
+            m_fields->scales[checkpoint] = targetScale;
+        }
+
+        updateCheckpointNumberLabels();
+    }
+
+    void decorateCheckpoint(CheckpointObject* checkpoint) {
+        if (!checkpoint) {
+            return;
+        }
+
+        auto node = checkpoint->m_physicalCheckpointObject;
+        if (!node) {
+            return;
+        }
+
+        if (node->getChildByID(checkpoint_mod::OuterId)) {
+            updateCheckpointNumberLabels();
+            return;
+        }
+
+        auto style = checkpoint_mod::getStyle();
+        auto pack = checkpoint_mod::getPack(style.shape);
+
+        auto outer = checkpoint_mod::spriteFromTexture(pack.outer);
+        auto inner = checkpoint_mod::spriteFromTexture(pack.inner);
+
+        if (!outer || !inner) {
+            return;
+        }
+
+        ccColor3B color = style.innerColor;
+
+        if (m_checkpointArray && m_checkpointArray->count() >= 2) {
+            auto previous = static_cast<CheckpointObject*>(m_checkpointArray->objectAtIndex(m_checkpointArray->count() - 2));
+            if (previous && previous->m_physicalCheckpointObject) {
+                auto previousOuter = previous->m_physicalCheckpointObject->getChildByID(checkpoint_mod::OuterId);
+                if (previousOuter) {
+                    auto previousInner = previousOuter->getChildByID(checkpoint_mod::InnerId);
+                    if (auto spr = typeinfo_cast<CCSprite*>(previousInner)) {
+                        color = spr->getColor();
+                    }
+                }
+            }
+        }
+
+        outer->setID(checkpoint_mod::OuterId);
+        inner->setID(checkpoint_mod::InnerId);
+
+        outer->setCascadeOpacityEnabled(true);
+        outer->setCascadeColorEnabled(true);
+        inner->setCascadeOpacityEnabled(true);
+        inner->setCascadeColorEnabled(true);
+
+        outer->setColor(style.outerColor);
+        inner->setColor(color);
+
+        outer->setScale(style.scale);
+
+        outer->setPosition(
+            ccp(
+                node->getContentSize().width / 2.f,
+                node->getContentSize().height / 2.f));
+
+        inner->setPosition(
+            ccp(
+                outer->getContentSize().width / 2.f,
+                outer->getContentSize().height / 2.f));
+
+        int zOrder = shouldLayerCheckpointsBehindPlayer() ? -1 : 1;
+        node->addChild(outer, zOrder);
+        outer->addChild(inner);
+
+        auto label = CCLabelBMFont::create("", "bigFont.fnt");
+        if (label) {
+            label->setID("checkpoint-number-label");
+            label->setScale(0.23f);
+            label->setAnchorPoint(ccp(0.5f, 0.5f));
+            label->setPosition(
+                ccp(
+                    outer->getContentSize().width * 0.76f,
+                    outer->getContentSize().height * 0.76f));
+            label->setColor({255, 255, 255});
+            label->setCascadeOpacityEnabled(true);
+            label->setCascadeColorEnabled(true);
+            outer->addChild(label, 999);
+        }
+
+        outer->setOpacity(0);
+        outer->setScale(style.scale * 0.75f);
+
+        updateCheckpointNumberLabels();
+    }
+
+    void saveCheckpointData(CheckpointObject* checkpoint) {
+        if (!checkpoint) {
+            return;
+        }
+        if (!shouldEnablePracticeFix()) {
+            return;
+        }
+        if (m_gameState.m_currentProgress <= 0) {
+            return;
+        }
+
+        SavedCheckpointData data;
+
+        data.player1Color = m_player1->getColor();
+        data.player1Rotation = m_player1->getRotation();
+        data.player1Position = m_player1->getPosition();
+
+        if (m_player2) {
+            data.player2Color = m_player2->getColor();
+            data.player2Rotation = m_player2->getRotation();
+            data.player2Position = m_player2->getPosition();
+        }
+
+        data.dual = m_gameState.m_isDualMode;
+        m_fields->checkpointData[checkpoint] = data;
+    }
+
+    void applySavedData(SavedCheckpointData const& data) {
+        if (!m_player1) {
+            return;
+        }
+
+        m_player1->setColor(data.player1Color);
+        m_player1->setRotation(data.player1Rotation);
+        m_player1->setPosition(data.player1Position);
+
+        if (m_player2 && data.dual) {
+            m_player2->setColor(data.player2Color);
+            m_player2->setRotation(data.player2Rotation);
+            m_player2->setPosition(data.player2Position);
+        }
+
+        m_gameState.m_isDualMode = data.dual;
+    }
+
+    void applyCheckpointData(CheckpointObject* checkpoint) {
+        if (!checkpoint) {
+            return;
+        }
+        if (!shouldEnablePracticeFix()) {
+            return;
+        }
+
+        auto it = m_fields->checkpointData.find(checkpoint);
+        if (it == m_fields->checkpointData.end()) {
+            return;
+        }
+
+        applySavedData(it->second);
+    }
+
+    void savePracticeResumeData() {
+        if (!m_isPracticeMode) {
+            return;
+        }
+        if (!m_player1) {
+            return;
+        }
+
+        auto key = levelResumeKey(this);
+        if (key.empty()) {
+            return;
+        }
+
+        SavedCheckpointData data;
+        data.player1Color = m_player1->getColor();
+        data.player1Rotation = m_player1->getRotation();
+        data.player1Position = m_player1->getPosition();
+
+        if (m_player2) {
+            data.player2Color = m_player2->getColor();
+            data.player2Rotation = m_player2->getRotation();
+            data.player2Position = m_player2->getPosition();
+        }
+
+        data.dual = m_gameState.m_isDualMode;
+        s_savedPracticeResumeData[key] = data;
+    }
+
+    void queuePracticeResumeRestore() {
+        auto key = levelResumeKey(this);
+        if (key.empty()) {
+            return;
+        }
+
+        auto it = s_savedPracticeResumeData.find(key);
+        if (it == s_savedPracticeResumeData.end()) {
+            return;
+        }
+
+        m_fields->resumeData = it->second;
+        m_fields->hasResumeData = true;
+        m_fields->resumeRestoreQueued = true;
+        m_fields->resumeRestoreApplied = false;
+    }
+
+    void tryApplyPracticeResumeRestore() {
+        if (!m_isPracticeMode) {
+            return;
+        }
+        if (!m_fields->resumeRestoreQueued || m_fields->resumeRestoreApplied) {
+            return;
+        }
+        if (!m_fields->hasResumeData) {
+            return;
+        }
+        if (!m_player1) {
+            return;
+        }
+
+        applySavedData(m_fields->resumeData);
+        m_fields->resumeRestoreApplied = true;
+    }
+
+    bool shouldRejectCheckpoint(CheckpointObject* checkpoint, bool& replaceLast) {
+        replaceLast = false;
+
+        if (!checkpoint || !m_checkpointArray || m_checkpointArray->count() == 0) {
+            return false;
+        }
+
+        auto last = lastStoredCheckpoint();
+        if (!last || last == checkpoint) {
+            return false;
+        }
+
+        auto lastPos = checkpointPosition(last);
+        auto newPos = checkpointPosition(checkpoint);
+        float dist = distanceBetween(lastPos, newPos);
+
+        if (shouldMergeDuplicateCheckpoints() && dist <= 1.f) {
+            replaceLast = true;
+            return false;
+        }
+
+        double minDist = minimumCheckpointDistance();
+        if (shouldRemoveCloseCheckpoints() && minDist > 0.0 && dist < static_cast<float>(minDist)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    void removeCheckpointVisual(CheckpointObject* checkpoint) {
+        auto outer = checkpointVisualNode(checkpoint);
+        if (!outer) {
+            return;
+        }
+
+        outer->stopAllActions();
+
+        auto parent = outer->getParent();
+        if (!parent) {
+            return;
+        }
+
+        auto worldPos = outer->convertToWorldSpaceAR(CCPointZero);
+        outer->removeFromParentAndCleanup(false);
+
+        auto localPos = this->convertToNodeSpaceAR(worldPos);
+        outer->setPosition(localPos);
+
+        int zOrder = shouldLayerCheckpointsBehindPlayer() ? -1 : 1;
+        this->addChild(outer, zOrder);
+
+        float duration = static_cast<float>(checkpointTransitionDuration());
+        float targetScale = std::max(0.05f, outer->getScale() * removalScaleFactor());
+
+        startVisualTransition(outer, 0.f, targetScale, duration, true);
+    }
+
+    void storeCheckpoint(CheckpointObject* checkpoint) {
+        if (!checkpoint) {
+            return;
+        }
+
+        bool replaceLast = false;
+        if (shouldRejectCheckpoint(checkpoint, replaceLast)) {
+            return;
+        }
+
+        if (replaceLast) {
+            removeCheckpoint(false);
+        }
+
+        auto mod = Mod::get();
+        bool unlimited = mod->getSettingValue<bool>("unlimited-checkpoints");
+        int limit = static_cast<int>(mod->getSettingValue<int64_t>("checkpoint-limit"));
+        limit = std::max(limit, 1);
+
+        if (unlimited) {
+            m_checkpointArray->addObject(checkpoint);
+            if (checkpoint->m_physicalCheckpointObject) {
+                PlayLayer::addToSection(checkpoint->m_physicalCheckpointObject);
+            }
+        } else {
+            PlayLayer::storeCheckpoint(checkpoint);
+
+            while (m_checkpointArray && m_checkpointArray->count() > static_cast<unsigned>(limit)) {
+                auto first = static_cast<CheckpointObject*>(m_checkpointArray->objectAtIndex(0));
+
+                if (first) {
+                    m_fields->opacities.erase(first);
+                    m_fields->scales.erase(first);
+                    m_fields->checkpointData.erase(first);
+                }
+
+                PlayLayer::removeCheckpoint(true);
+            }
+        }
+
+        decorateCheckpoint(checkpoint);
+        saveCheckpointData(checkpoint);
+        rebuildCheckpointAppearance();
+    }
+
+    void loadFromCheckpoint(CheckpointObject* checkpoint) {
+        PlayLayer::loadFromCheckpoint(checkpoint);
+        applyCheckpointData(checkpoint);
+    }
+
+    void removeCheckpoint(bool first) {
+        CheckpointObject* checkpoint = nullptr;
+
+        if (m_checkpointArray && m_checkpointArray->count()) {
+            checkpoint = first ? static_cast<CheckpointObject*>(m_checkpointArray->objectAtIndex(0))
+                               : static_cast<CheckpointObject*>(m_checkpointArray->lastObject());
+        }
+
+        if (checkpoint) {
+            m_fields->opacities.erase(checkpoint);
+            m_fields->scales.erase(checkpoint);
+            m_fields->checkpointData.erase(checkpoint);
+            removeCheckpointVisual(checkpoint);
+        }
+
+        PlayLayer::removeCheckpoint(first);
+
+        if (checkpoint) {
+            auto mod = Mod::get();
+            bool enabled = mod->getSettingValue<bool>("enable-deleting-sounds");
+            auto soundPath = mod->getSettingValue<std::string>("choose-custom-sound-for-deleting");
+            std::filesystem::path file(soundPath);
+            checkpoint_mod::playCheckpointSound(enabled, file, "checkpoint_remove_sfx.ogg", static_cast<float>(mod->getSettingValue<double>("sound-pitch-variance")));
+        }
+
+        rebuildCheckpointAppearance();
+    }
+
+    void removeAllCheckpoints() {
+        clearPendingRemovalTransitions();
+        PlayLayer::removeAllCheckpoints();
+        clearCheckpointCaches();
+    }
+
+    void resetLevel() {
+        if (!m_checkpointArray || m_checkpointArray->count() <= 0) {
+            clearCheckpointCaches();
+        }
+
+        PlayLayer::resetLevel();
+        queuePracticeResumeRestore();
+    }
+
+    void togglePracticeMode(bool mode) {
+        PlayLayer::togglePracticeMode(mode);
+
+        if (!mode) {
+            clearCheckpointCaches();
+        } else {
+            queuePracticeResumeRestore();
+        }
+    }
+
+    void onQuit() {
+        savePracticeResumeData();
+        PlayLayer::onQuit();
+    }
+
+    void destroyPlayer(PlayerObject* player, GameObject* object) {
+        if (m_isPracticeMode && shouldKeepCheckpointsAfterDeaths()) {
+            while (m_checkpointArray && m_checkpointArray->count() > 1) {
+                removeCheckpoint(true);
+            }
+        }
+
+        PlayLayer::destroyPlayer(player, object);
+    }
+
+    void postUpdate(float dt) {
+        PlayLayer::postUpdate(dt);
+
+        tryApplyPracticeResumeRestore();
+        updateVisualTransitions(dt);
+
+        if (!m_checkpointArray) {
+            return;
+        }
+
+        for (auto checkpoint : CCArrayExt<CheckpointObject*>(m_checkpointArray)) {
+            if (!checkpoint || !checkpoint->m_physicalCheckpointObject) {
+                continue;
+            }
+
+            auto outer = checkpointVisualNode(checkpoint);
+            if (!outer) {
+                continue;
+            }
+
+            auto itOpacity = m_fields->opacities.find(checkpoint);
+            if (itOpacity != m_fields->opacities.end()) {
+                applyOpacity(outer, itOpacity->second);
+            }
+
+            auto itScale = m_fields->scales.find(checkpoint);
+            if (itScale != m_fields->scales.end()) {
+                applyScale(outer, itScale->second);
+            }
+        }
+    }
+};
