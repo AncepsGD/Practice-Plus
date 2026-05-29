@@ -4,5 +4,5 @@
 #include <filesystem>
 
 namespace checkpoint_mod {
-    void playCheckpointSound(bool enabled, std::filesystem::path const &file, char const *fallback, double pitchVariance = 0.0);
+    void playCheckpointSound(bool enabled, std::filesystem::path const &file, char const *fallback, double pitchVariance = 0.15);
 }
