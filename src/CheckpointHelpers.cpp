@@ -18,7 +18,7 @@ namespace checkpoint_mod
         {
             Circle = 0,
             Square = 1,
-            Hexagon = 2,
+            X = 2,
             Diamond = 3,
         };
 
@@ -79,8 +79,8 @@ namespace checkpoint_mod
                 return ShapeKind::Circle;
             if (equalsIgnoreCase(key, "square"))
                 return ShapeKind::Square;
-            if (equalsIgnoreCase(key, "hexagon"))
-                return ShapeKind::Hexagon;
+            if (equalsIgnoreCase(key, "x"))
+                return ShapeKind::X;
             return ShapeKind::Diamond;
         }
 
@@ -92,8 +92,8 @@ namespace checkpoint_mod
                 return "circle";
             case ShapeKind::Square:
                 return "square";
-            case ShapeKind::Hexagon:
-                return "hexagon";
+            case ShapeKind::X:
+                return "x";
             case ShapeKind::Diamond:
                 return "diamond";
             }
@@ -110,7 +110,7 @@ namespace checkpoint_mod
             return {
                 makePack("checkpoint_circle_outer.png"_spr, "checkpoint_circle_inner.png"_spr),
                 makePack("checkpoint_square_outer.png"_spr, "checkpoint_square_inner.png"_spr),
-                makePack("checkpoint_hexagon_outer.png"_spr, "checkpoint_hexagon_inner.png"_spr),
+                makePack("checkpoint_x_outer.png"_spr, "checkpoint_x_inner.png"_spr),
                 makePack("checkpoint_diamond_outer.png"_spr, "checkpoint_diamond_inner.png"_spr),
             };
         }
