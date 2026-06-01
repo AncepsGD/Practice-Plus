@@ -100,14 +100,6 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
         return 255u;
     }
 
-#define CCLOG(...)                                 \
-    do                                             \
-    {                                              \
-        char _buf[1024];                           \
-        snprintf(_buf, sizeof(_buf), __VA_ARGS__); \
-        geode::log::info("{}", _buf);              \
-    } while (0)
-
     static bool isOurOverlayNode(cocos2d::CCNode *node)
     {
         if (!node)
@@ -149,26 +141,6 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
         }
     }
 
-    static void logNodeState(const char *label, cocos2d::CCNode *node)
-    {
-        if (!node)
-        {
-            CCLOG("[%s] node=null", label);
-            return;
-        }
-
-        CCLOG(
-            "[%s] node=%p id=%s class=%s visible=%d opacity=%u parent=%p children=%u",
-            label,
-            node,
-            node->getID().c_str(),
-            typeid(*node).name(),
-            node->isVisible(),
-            getNodeOpacity(node),
-            node->getParent(),
-            node->getChildren() ? static_cast<unsigned>(node->getChildren()->count()) : 0u);
-    }
-
     static cocos2d::CCSprite *createSpriteFromPathOrFallback(
         std::filesystem::path const &path,
         char const *fallback)
@@ -178,8 +150,6 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
             auto pathStr = path.string();
             if (auto *sprite = cocos2d::CCSprite::create(pathStr.c_str()))
                 return sprite;
-
-            CCLOG("[Practice Plus]: failed to load custom checkpoint image: %s", pathStr.c_str());
         }
 
         return cocos2d::CCSprite::create(fallback);
