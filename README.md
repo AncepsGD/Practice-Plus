@@ -24,3 +24,11 @@ Practice+ expands Practice Mode with configurable checkpoints, visual customizat
 - Mods altering Practice Mode logic
 - Mods replacing checkpoint systems
 - Input hook & event interception mods
+
+## Credits
+#### Main developers:
+- Anceps
+- Vanouper
+
+#### Thank you to:
+- [Practice Mode List](https://practicemodelist.pages.dev/)
