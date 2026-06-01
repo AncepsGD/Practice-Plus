@@ -1,9 +1,24 @@
-# PracticePlus
+# Practice+
 
-ignore README.md
+Practice+ expands Practice Mode with configurable checkpoints, visual customization, and practice-related tools.
 
-NOTE: This mod features AI-assisted code. Any code with AI-assistance will be marked with @@@ in the repo
-ANOTHER NOTE: Code for the PML was made with https://github.com/hiimjasmine00/IntegratedDemonlist/tree/master as a reference.
+## Features
 
-The logo for Practice+ is the Practice Mode List logo (https://practicemodelist.pages.dev/):
-<img src="logo.png" width="150" alt="the mod's logo" />
+- Custom checkpoint visuals (shape, scale, opacity, inner & outer colors)
+- Optional custom image for checkpoints
+- Toggle to render checkpoints behind the player for clarity
+- Fade-in animation on placement
+- Configurable respawn delay exclusively for practice mode after death
+- Practice coins toggle (enable coin collection in Practice Mode)
+- Optional checkpoint limit system
+- Placement and removal sound effects
+
+## Dependencies
+
+- `hiimjasmine00.optional_settings` `v2.0.0`
+- `geode.node-ids` `v1.23.3`
+
+### Possible Conflicts
+- Mods altering Practice Mode logic
+- Mods replacing checkpoint systems
+- Input hook & event interception mods
