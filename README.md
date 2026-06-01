@@ -6,12 +6,14 @@ Practice+ expands Practice Mode with configurable checkpoints, visual customizat
 
 - Custom checkpoint visuals (shape, scale, opacity, inner & outer colors)
 - Optional custom image for checkpoints
+- Blue percentage & checkmark for practice mode progress
 - Toggle to render checkpoints behind the player for clarity
 - Fade-in animation on placement
 - Configurable respawn delay exclusively for practice mode after death
 - Practice coins toggle (enable coin collection in Practice Mode)
 - Optional checkpoint limit system
 - Placement and removal sound effects
+- Ingame [Practice Mode List](https://practicemodelist.pages.dev/) integration; view the list within Geometry Dash
 
 ## Dependencies
 
