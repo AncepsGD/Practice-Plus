@@ -1,6 +1,6 @@
-# Practice+
+# Practice Plus
 
-Practice+ expands Practice Mode with configurable checkpoints, visual customization, and practice-related tools.
+Practice Plus expands Practice Mode with configurable checkpoints, visual customization, and practice-related tools.
 
 ## Features
 
@@ -13,7 +13,6 @@ Practice+ expands Practice Mode with configurable checkpoints, visual customizat
 - Practice coins toggle (enable coin collection in Practice Mode)
 - Optional checkpoint limit system
 - Placement and removal sound effects
-- Ingame [Practice Mode List](https://practicemodelist.pages.dev/) integration; view the list within Geometry Dash
 
 ## Dependencies
 

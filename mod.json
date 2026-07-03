@@ -7,7 +7,7 @@
     "ios": "2.2081"
   },
   "id": "anceps.practiceplus",
-  "name": "Practice+",
+  "name": "Practice Plus",
   "version": "v1.0.0-alpha.5",
   "developers": ["Anceps, Vanouper"],
   "description": "Expand Practice like never before :)",
@@ -24,6 +24,16 @@
       "resources/checkpoint_remove_sfx.ogg"
     ]
   },
+
+  "tags": [
+    "universal",
+    "gameplay",
+    "offline",
+    "enhancement",
+    "utility",
+    "performance",
+    "customization"
+  ],
 
   "settings": {
     "custom-checkpoints-enabled": {
@@ -45,7 +55,7 @@
       "name": "Checkpoint Scale",
       "description": "Scale factor for checkpoint visuals.",
       "type": "float",
-      "default": 1.0,
+      "default": 0.7,
       "min": 0.25,
       "max": 4.0
     },
@@ -70,7 +80,7 @@
       "name": "Outer Checkpoint Color",
       "description": "Color of the outer checkpoint ring.",
       "type": "color",
-      "default": "#00FFFF"
+      "default": "#FFFFFF"
     },
 
     "checkpoint-inner-color-enabled": {
@@ -84,21 +94,46 @@
       "name": "Inner Checkpoint Color",
       "description": "Color of the inner checkpoint fill.",
       "type": "color",
-      "default": "#FFFFFF"
+      "default": "#FF4C00"
+    },
+
+    "checkpoint-fade-enabled": {
+      "name": "Fade With Placement Count",
+      "description": "Each newly placed checkpoint becomes slightly more transparent.",
+      "type": "bool",
+      "default": false
+    },
+
+    "checkpoint-fade-step": {
+      "name": "Fade Step",
+      "description": "Opacity lost for each additional checkpoint.",
+      "type": "int",
+      "default": 90,
+      "min": 0,
+      "max": 255
+    },
+
+    "checkpoint-fade-min": {
+      "name": "Fade Minimum",
+      "description": "Lowest opacity allowed for later checkpoints.",
+      "type": "int",
+      "default": 0,
+      "min": 0,
+      "max": 255
     },
 
     "checkpoint-fadein-enabled": {
       "name": "Fade-In on Placement",
       "description": "Checkpoints fade in when placed.",
       "type": "bool",
-      "default": false
+      "default": true
     },
 
     "checkpoint-fadein-duration": {
       "name": "Fade-In Duration",
       "description": "Duration of fade-in animation in seconds.",
       "type": "float",
-      "default": 0.4,
+      "default": 0.2,
       "min": 0.05,
       "max": 3.0
     },
@@ -137,8 +172,8 @@
       "name": "Checkpoint Limit",
       "description": "Maximum number of practice checkpoints. Disabled if unset.",
       "type": "custom:hiimjasmine00.optional_settings/optional-int",
-      "default": 5,
-      "default-enabled": false
+      "default": 999,
+      "default-enabled": true
     },
 
     "checkpoint-restriction": {
@@ -148,11 +183,18 @@
       "default": true
     },
 
+    "practice-overlay-enabled": {
+      "name": "Practice Overlay",
+      "description": "Show the practice mode HUD overlay.",
+      "type": "bool",
+      "default": true
+    },
+
     "practice-coins-enabled": {
       "name": "Practice Coins",
       "description": "Allow coins to be collected in practice mode.",
       "type": "bool",
-      "default": false
+      "default": true
     },
 
     "checkpoint-behind-player": {
@@ -165,50 +207,27 @@
       "name": "Custom Respawn Delay",
       "description": "Enable custom respawn delay in practice mode.",
       "type": "bool",
-      "default": false
+      "default": true
     },
     "respawn-active-index": {
       "name": "Active Respawn Preset",
       "description": "Current active respawn time preset.",
       "type": "int",
-      "default": 3,
+      "default": 1,
       "min": 0,
-      "max": 4
+      "max": 1
     },
     "respawn-preset-0": {
-      "name": "Preset 0 Value",
       "type": "float",
       "default": 0.0,
       "min": 0.0,
-      "max": 32767.0
+      "max": 2
     },
     "respawn-preset-1": {
-      "name": "Preset 1 Value",
-      "type": "float",
-      "default": 0.1,
-      "min": 0.0,
-      "max": 32767.0
-    },
-    "respawn-preset-2": {
-      "name": "Preset 2 Value",
       "type": "float",
       "default": 0.5,
       "min": 0.0,
-      "max": 32767.0
-    },
-    "respawn-preset-3": {
-      "name": "Preset 3 Value",
-      "type": "float",
-      "default": 1.0,
-      "min": 0.0,
-      "max": 32767.0
-    },
-    "respawn-preset-4": {
-      "name": "Preset 4 Value",
-      "type": "float",
-      "default": 32767.0,
-      "min": 0.0,
-      "max": 32767.0
+      "max": 2
     },
     "cycle-respawn-time": {
       "name": "Cycle Respawn Time",
