@@ -1,5 +1,5 @@
 {
-  "geode": "5.5.3",
+  "geode": "5.7.1",
   "gd": {
     "win": "2.2081",
     "android": "2.2081",
@@ -8,7 +8,7 @@
   },
   "id": "anceps.practiceplus",
   "name": "Practice Plus",
-  "version": "v1.0.0-alpha.5",
+  "version": "v1.0.1",
   "developers": ["Anceps, Vanouper"],
   "description": "Expand Practice like never before :)",
 
@@ -25,13 +25,18 @@
     ]
   },
 
+  "links": {
+    "homepage": "https://practicemodelist.pages.dev",
+    "community": "https://discord.gg/4sGSQXFR8N",
+    "source": "https://github.com/AncepsGD/Practice-Plus"
+  },
+
   "tags": [
     "universal",
     "gameplay",
     "offline",
     "enhancement",
     "utility",
-    "performance",
     "customization"
   ],
 
