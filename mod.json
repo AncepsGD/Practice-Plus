@@ -9,7 +9,7 @@
   "id": "anceps.practiceplus",
   "name": "Practice Plus",
   "version": "v1.0.1",
-  "developers": ["Anceps", "Vanouper"]
+  "developers": ["Anceps", "Vanouper"],
   "description": "Expand Practice like never before :)",
 
   "dependencies": {
