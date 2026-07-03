@@ -27,11 +27,9 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
         bool enabled = false;
         bool outerColor = false;
         bool innerColor = false;
-        bool rainbow = false;
         bool fade = false;
         bool fadeIn = false;
 
-        float rainbowSpeed = 1.f;
         GLubyte opacity = 255;
         GLubyte fadeStep = 30;
         GLubyte fadeMin = 20;
@@ -49,13 +47,8 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
             s.enabled = mod->getSettingValue<bool>("custom-checkpoints-enabled");
             s.outerColor = mod->getSettingValue<bool>("checkpoint-outer-color-enabled");
             s.innerColor = mod->getSettingValue<bool>("checkpoint-inner-color-enabled");
-            s.rainbow = mod->getSettingValue<bool>("checkpoint-rainbow-enabled");
             s.fade = mod->getSettingValue<bool>("checkpoint-fade-enabled");
             s.fadeIn = mod->getSettingValue<bool>("checkpoint-fadein-enabled");
-
-            s.rainbowSpeed = std::max(
-                0.01f,
-                static_cast<float>(mod->getSettingValue<double>("checkpoint-rainbow-speed")));
 
             s.opacity = static_cast<GLubyte>(
                 std::clamp<int64_t>(mod->getSettingValue<int64_t>("checkpoint-opacity"), 0, 255));
@@ -74,19 +67,6 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
         }
 
         return s;
-    }
-
-    static ccColor3B rainbowColorForIndex(int index)
-    {
-        static constexpr ccColor3B kRainbow[6] = {
-            {255, 0, 0},
-            {255, 255, 0},
-            {0, 255, 0},
-            {0, 255, 255},
-            {0, 0, 255},
-            {255, 0, 255},
-        };
-        return kRainbow[((index % 6) + 6) % 6];
     }
 
     static unsigned getNodeOpacity(cocos2d::CCNode *node)
@@ -123,6 +103,54 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
         node->setVisible(false);
     }
 
+    static void setOpacityAndVisibility(cocos2d::CCNode *node, GLubyte opacity)
+    {
+        if (!node)
+            return;
+
+        if (auto *rgba = typeinfo_cast<cocos2d::CCRGBAProtocol *>(node))
+            rgba->setOpacity(opacity);
+
+        node->setVisible(opacity != 0);
+    }
+
+    static void updateOverlayOpacity(cocos2d::CCNode *node, GLubyte opacity)
+    {
+        if (!node)
+            return;
+
+        setOpacityAndVisibility(node, opacity);
+        if (auto *children = node->getChildren())
+        {
+            for (size_t i = 0; i < children->count(); ++i)
+            {
+                auto *child = static_cast<cocos2d::CCNode *>(children->objectAtIndex(i));
+                updateOverlayOpacity(child, opacity);
+            }
+        }
+    }
+
+    static void updateNodeVisibilityForOpacity(cocos2d::CCNode *node)
+    {
+        if (!node)
+            return;
+
+        if (auto *rgba = typeinfo_cast<cocos2d::CCRGBAProtocol *>(node))
+        {
+            auto opacity = rgba->getOpacity();
+            node->setVisible(opacity != 0);
+        }
+
+        if (auto *children = node->getChildren())
+        {
+            for (size_t i = 0; i < children->count(); ++i)
+            {
+                auto *child = static_cast<cocos2d::CCNode *>(children->objectAtIndex(i));
+                updateNodeVisibilityForOpacity(child);
+            }
+        }
+    }
+
     static void hideNodeRecursive(cocos2d::CCNode *root)
     {
         if (!root || isOurOverlayNode(root))
@@ -153,6 +181,65 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
         }
 
         return cocos2d::CCSprite::create(fallback);
+    }
+
+    static GLubyte computeFadeOpacity(Settings const &settings, int index, int total)
+    {
+        int fadeIndex = std::max(0, total - 1 - index);
+        int reduced = static_cast<int>(settings.opacity) - fadeIndex * static_cast<int>(settings.fadeStep);
+        int floored = std::max(reduced, static_cast<int>(settings.fadeMin));
+        return static_cast<GLubyte>(std::clamp(floored, 0, 255));
+    }
+
+    void refreshCheckpointOpacity(CheckpointObject *checkpoint, int checkpointIndex, Settings const &settings)
+    {
+        if (!checkpoint || !settings.fade)
+            return;
+
+        auto cpIt = s_cpToOid.find(checkpoint);
+        if (cpIt == s_cpToOid.end())
+            return;
+
+        auto overlayIt = s_overlayMap.find(cpIt->second);
+        if (overlayIt == s_overlayMap.end())
+            return;
+
+        auto *outer = overlayIt->second.second;
+        if (!outer)
+            return;
+
+        int total = m_checkpointArray ? static_cast<int>(m_checkpointArray->count()) : 1;
+        auto targetOpacity = computeFadeOpacity(settings, checkpointIndex, total);
+
+        updateOverlayOpacity(outer, targetOpacity);
+    }
+
+    void refreshAllCheckpointOpacity(Settings const &settings)
+    {
+        if (!m_checkpointArray || !settings.fade)
+            return;
+
+        for (unsigned i = 0; i < m_checkpointArray->count(); ++i)
+        {
+            auto *checkpoint = static_cast<CheckpointObject *>(m_checkpointArray->objectAtIndex(i));
+            refreshCheckpointOpacity(checkpoint, static_cast<int>(i), settings);
+        }
+    }
+
+    void removeOverlayNodeByTag(int overlayId, cocos2d::CCNode *node)
+    {
+        int tag = 0x4F000000 + overlayId;
+        if (m_objectLayer)
+        {
+            m_objectLayer->removeChildByTag(tag, true);
+            return;
+        }
+
+        if (!node)
+            return;
+
+        if (auto *parent = node->getParent())
+            parent->removeChildByTag(tag, true);
     }
 
     void decorateCheckpoint(CheckpointObject *checkpoint, bool isNewPlacement)
@@ -210,32 +297,21 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
         outer->setID(checkpoint_mod::OuterId);
         outer->setTag(0x4F000000 + s_nextOverlayId);
 
-        outer->setCascadeOpacityEnabled(true);
-        outer->setCascadeColorEnabled(true);
+        outer->setCascadeOpacityEnabled(false);
+        outer->setCascadeColorEnabled(false);
 
         if (!useCustomImage)
         {
             inner->setID(checkpoint_mod::InnerId);
-            inner->setCascadeOpacityEnabled(true);
-            inner->setCascadeColorEnabled(true);
+            inner->setCascadeOpacityEnabled(false);
+            inner->setCascadeColorEnabled(false);
             inner->setTag(outer->getTag());
 
-            int idx = m_fields->placementIndex;
+            if (settings.outerColor)
+                outer->setColor(style.outerColor);
 
-            if (settings.rainbow)
-            {
-                auto color = rainbowColorForIndex(idx);
-                outer->setColor(color);
-                inner->setColor(color);
-            }
-            else
-            {
-                if (settings.outerColor)
-                    outer->setColor(style.outerColor);
-
-                if (settings.innerColor)
-                    inner->setColor(style.innerColor);
-            }
+            if (settings.innerColor)
+                inner->setColor(style.innerColor);
         }
 
         int idx = m_fields->placementIndex;
@@ -243,19 +319,28 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
         GLubyte targetOpacity = settings.opacity;
         if (settings.fade)
         {
-            int reduced = static_cast<int>(settings.opacity) - idx * static_cast<int>(settings.fadeStep);
-            int floored = std::max(reduced, static_cast<int>(settings.fadeMin));
-            targetOpacity = static_cast<GLubyte>(std::clamp(floored, 0, 255));
+            int total = std::max(1, idx + 1);
+            targetOpacity = computeFadeOpacity(settings, idx, total);
         }
 
         if (settings.fadeIn && isNewPlacement)
         {
-            outer->setOpacity(0);
-            outer->runAction(CCFadeTo::create(settings.fadeInDuration, targetOpacity));
+            if (targetOpacity == 0)
+            {
+                outer->setOpacity(0);
+                outer->setVisible(false);
+            }
+            else
+            {
+                outer->setOpacity(0);
+                outer->setVisible(true);
+                outer->runAction(CCFadeTo::create(settings.fadeInDuration, targetOpacity));
+            }
         }
         else
         {
             outer->setOpacity(targetOpacity);
+            outer->setVisible(targetOpacity != 0);
         }
 
         auto nodeSize = phys->getContentSize();
@@ -269,14 +354,21 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
         outer->setAnchorPoint({0.5f, 0.5f});
         outer->setScale(scale);
 
-        auto *overlayParent = phys->getParent();
+        cocos2d::CCNode *overlayParent = m_objectLayer;
         if (!overlayParent)
-            overlayParent = m_objectLayer;
+            overlayParent = phys->getParent();
 
         if (overlayParent)
         {
             auto physAnchor = phys->getAnchorPoint();
             auto physPos = phys->getPosition();
+
+            if (auto *physParent = phys->getParent())
+            {
+                auto worldPos = physParent->convertToWorldSpace(physPos);
+                physPos = overlayParent->convertToNodeSpace(worldPos);
+            }
+
             outer->setPosition({
                 physPos.x + (0.5f - physAnchor.x) * nodeSize.width,
                 physPos.y + (0.5f - physAnchor.y) * nodeSize.height,
@@ -311,6 +403,9 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
             int overlayId = s_nextOverlayId++;
             s_overlayMap[overlayId] = {checkpoint->m_uniqueID, outer};
             s_cpToOid[checkpoint] = overlayId;
+
+            if (settings.fade)
+                refreshAllCheckpointOpacity(settings);
         }
     }
 
@@ -319,17 +414,46 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
         PlayLayer::storeCheckpoint(checkpoint);
         decorateCheckpoint(checkpoint, true);
         ++m_fields->placementIndex;
+
+        auto settings = getSettings();
+        if (settings.fade)
+            refreshAllCheckpointOpacity(settings);
     }
 
     void loadFromCheckpoint(CheckpointObject *checkpoint)
     {
         PlayLayer::loadFromCheckpoint(checkpoint);
         decorateCheckpoint(checkpoint, false);
+
+        auto settings = getSettings();
+        if (settings.fade)
+            refreshAllCheckpointOpacity(settings);
+    }
+
+    void clearAllCheckpointOverlays()
+    {
+        std::vector<int> overlayIds;
+        overlayIds.reserve(s_overlayMap.size());
+        for (auto const &entry : s_overlayMap)
+            overlayIds.push_back(entry.first);
+
+        for (int overlayId : overlayIds)
+        {
+            auto overlayIt = s_overlayMap.find(overlayId);
+            if (overlayIt == s_overlayMap.end())
+                continue;
+
+            removeOverlayNodeByTag(overlayId, overlayIt->second.second);
+        }
+
+        s_overlayMap.clear();
+        s_cpToOid.clear();
     }
 
     void resetLevel()
     {
         PlayLayer::resetLevel();
+        clearAllCheckpointOverlays();
         m_fields->placementIndex = 0;
 
         if (m_checkpointArray && m_checkpointArray->count())
@@ -337,61 +461,151 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
             decorateCheckpoint(
                 static_cast<CheckpointObject *>(m_checkpointArray->lastObject()),
                 false);
+
+            auto settings = getSettings();
+            if (settings.fade)
+                refreshAllCheckpointOpacity(settings);
         }
+    }
+
+    CheckpointObject *getCheckpointToRemove(bool first)
+    {
+        if (!m_checkpointArray || m_checkpointArray->count() == 0)
+            return nullptr;
+
+        return static_cast<CheckpointObject *>(
+            first ? m_checkpointArray->objectAtIndex(0)
+                  : m_checkpointArray->lastObject());
+    }
+
+    void removeOverlayForCheckpoint(CheckpointObject *checkpoint)
+    {
+        if (!checkpoint)
+            return;
+
+        auto it = s_cpToOid.find(checkpoint);
+        if (it == s_cpToOid.end())
+            return;
+
+        int oid = it->second;
+        auto overlayIt = s_overlayMap.find(oid);
+        if (overlayIt != s_overlayMap.end())
+        {
+            removeOverlayNodeByTag(oid, overlayIt->second.second);
+            s_overlayMap.erase(overlayIt);
+        }
+
+        s_cpToOid.erase(it);
+    }
+
+    void cleanupMissingCheckpointOverlays()
+    {
+        if (!m_checkpointArray || m_checkpointArray->count() == 0)
+        {
+            std::vector<int> overlayIds;
+            overlayIds.reserve(s_overlayMap.size());
+            for (auto const &entry : s_overlayMap)
+                overlayIds.push_back(entry.first);
+
+            for (int overlayId : overlayIds)
+            {
+                auto overlayIt = s_overlayMap.find(overlayId);
+                if (overlayIt == s_overlayMap.end())
+                    continue;
+
+                removeOverlayNodeByTag(overlayId, overlayIt->second.second);
+            }
+
+            s_overlayMap.clear();
+            s_cpToOid.clear();
+            return;
+        }
+
+        std::vector<std::pair<CheckpointObject *, int>> staleEntries;
+        staleEntries.reserve(s_cpToOid.size());
+
+        for (auto it = s_cpToOid.begin(); it != s_cpToOid.end(); ++it)
+        {
+            CheckpointObject *cp = it->first;
+            int oid = it->second;
+            bool cpRemoved = true;
+
+            for (unsigned i = 0; i < m_checkpointArray->count(); ++i)
+            {
+                if (m_checkpointArray->objectAtIndex(i) == cp)
+                {
+                    cpRemoved = false;
+                    break;
+                }
+            }
+
+            if (cpRemoved)
+            {
+                staleEntries.emplace_back(cp, oid);
+            }
+        }
+
+        for (auto const &[cp, oid] : staleEntries)
+        {
+            auto overlayIt = s_overlayMap.find(oid);
+            if (overlayIt != s_overlayMap.end())
+            {
+                removeOverlayNodeByTag(oid, overlayIt->second.second);
+                s_overlayMap.erase(overlayIt);
+            }
+
+            s_cpToOid.erase(cp);
+        }
+    }
+
+    void removeAllCheckpoints()
+    {
+        clearAllCheckpointOverlays();
+        PlayLayer::removeAllCheckpoints();
+        m_fields->placementIndex = 0;
+
+        auto settings = getSettings();
+        if (settings.fade)
+            refreshAllCheckpointOpacity(settings);
+    }
+
+    void togglePracticeMode(bool practiceMode)
+    {
+        PlayLayer::togglePracticeMode(practiceMode);
+
+        if (!practiceMode)
+        {
+            clearAllCheckpointOverlays();
+            m_fields->placementIndex = 0;
+            return;
+        }
+
+        m_fields->placementIndex = 0;
+        if (!m_checkpointArray)
+            return;
+
+        for (unsigned i = 0; i < m_checkpointArray->count(); ++i)
+        {
+            auto *checkpoint = static_cast<CheckpointObject *>(m_checkpointArray->objectAtIndex(i));
+            decorateCheckpoint(checkpoint, false);
+            ++m_fields->placementIndex;
+        }
+
+        auto settings = getSettings();
+        if (settings.fade)
+            refreshAllCheckpointOpacity(settings);
     }
 
     void removeCheckpoint(bool p0)
     {
+        auto *checkpoint = getCheckpointToRemove(p0);
+        removeOverlayForCheckpoint(checkpoint);
+
         PlayLayer::removeCheckpoint(p0);
+        cleanupMissingCheckpointOverlays();
 
-        std::unordered_set<CheckpointObject *> presentPtrs;
-        if (m_checkpointArray)
-        {
-            for (unsigned i = 0; i < m_checkpointArray->count(); ++i)
-            {
-                auto *cp = static_cast<CheckpointObject *>(m_checkpointArray->objectAtIndex(i));
-                if (cp)
-                    presentPtrs.insert(cp);
-            }
-        }
-
-        for (auto it = s_cpToOid.begin(); it != s_cpToOid.end();)
-        {
-            CheckpointObject *cp = it->first;
-            int oid = it->second;
-
-            if (presentPtrs.find(cp) == presentPtrs.end())
-            {
-                auto sit = s_overlayMap.find(oid);
-                cocos2d::CCNode *node = nullptr;
-
-                if (sit != s_overlayMap.end())
-                    node = sit->second.second;
-
-                if (node)
-                {
-                    auto *parent = node->getParent();
-                    if (parent)
-                    {
-                        parent->removeChild(node, true);
-                    }
-                    else if (m_objectLayer)
-                    {
-                        auto *child = m_objectLayer->getChildByTag(0x4F000000 + oid);
-                        if (child)
-                            m_objectLayer->removeChildByTag(0x4F000000 + oid, true);
-                    }
-                }
-
-                if (sit != s_overlayMap.end())
-                    s_overlayMap.erase(sit);
-
-                it = s_cpToOid.erase(it);
-            }
-            else
-            {
-                ++it;
-            }
-        }
+        auto settings = getSettings();
+        if (settings.fade)
+            refreshAllCheckpointOpacity(settings);
     }
 };

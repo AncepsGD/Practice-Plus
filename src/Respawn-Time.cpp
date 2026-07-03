@@ -17,15 +17,13 @@ class $modify(PracticeRespawnPlayLayer, PlayLayer)
     {
         Zero = 0,
         PointOne,
-        Half,
-        One,
         Infinite
     };
 
     RespawnPreset getPreset()
     {
         int index = Mod::get()->getSettingValue<int>("respawn-active-index");
-        index = std::clamp(index, 0, 4);
+        index = std::clamp(index, 0, 1);
         return static_cast<RespawnPreset>(index);
     }
 
@@ -42,13 +40,9 @@ class $modify(PracticeRespawnPlayLayer, PlayLayer)
         case RespawnPreset::Zero:
             return 0.0f;
         case RespawnPreset::PointOne:
-            return 0.1f;
-        case RespawnPreset::Half:
             return 0.5f;
-        case RespawnPreset::One:
-            return 1.0f;
         case RespawnPreset::Infinite:
-            return 32767.0f;
+            return -1.0f;
         }
 
         return 0.0f;
@@ -61,22 +55,22 @@ class $modify(PracticeRespawnPlayLayer, PlayLayer)
         case RespawnPreset::Zero:
             return "0s";
         case RespawnPreset::PointOne:
-            return "0.1s";
-        case RespawnPreset::Half:
             return "0.5s";
-        case RespawnPreset::One:
-            return "1s";
         case RespawnPreset::Infinite:
             return "INF";
         }
 
-        return "0.5s";
+        return "0s";
     }
 
     void cycleRespawnTime()
     {
+        this->unschedule(schedule_selector(PracticeRespawnPlayLayer::triggerRespawn));
+        m_fields->respawnScheduled = false;
+
         int index = Mod::get()->getSettingValue<int>("respawn-active-index");
-        index = (index + 1) % 5;
+
+        index = (index == 0) ? 1 : 0;
 
         Mod::get()->setSettingValue<int>("respawn-active-index", index);
         Mod::get()->setSettingValue<bool>("practice-respawn-time-enabled", true);
@@ -97,15 +91,52 @@ class $modify(PracticeRespawnPlayLayer, PlayLayer)
     void triggerRespawn(float)
     {
         m_fields->respawnScheduled = false;
-        this->delayedResetLevel();
+        if (m_isPracticeMode && getPreset() == RespawnPreset::Infinite)
+            return;
+
+        PlayLayer::delayedResetLevel();
+    }
+
+    void delayedResetLevel()
+    {
+        if (m_isPracticeMode && getPreset() == RespawnPreset::Infinite)
+            return;
+
+        PlayLayer::delayedResetLevel();
+    }
+
+    void fullReset()
+    {
+        if (m_isPracticeMode && getPreset() == RespawnPreset::Infinite)
+            return;
+
+        PlayLayer::fullReset();
+    }
+
+    void resetLevel()
+    {
+        this->unschedule(schedule_selector(PracticeRespawnPlayLayer::triggerRespawn));
+        m_fields->respawnScheduled = false;
+        PlayLayer::resetLevel();
     }
 
     void destroyPlayer(PlayerObject *player, GameObject *object)
     {
-        PlayLayer::destroyPlayer(player, object);
-
         if (!m_isPracticeMode)
+        {
+            PlayLayer::destroyPlayer(player, object);
             return;
+        }
+
+        if (getPreset() == RespawnPreset::Infinite)
+        {
+            this->unschedule(schedule_selector(PracticeRespawnPlayLayer::triggerRespawn));
+            m_fields->respawnScheduled = false;
+            PlayLayer::destroyPlayer(player, object);
+            return;
+        }
+
+        PlayLayer::destroyPlayer(player, object);
 
         float delay = getRespawnTime();
 

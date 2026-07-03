@@ -234,6 +234,4 @@ namespace checkpoint_mod
         hasCached = true;
         return cachedStyle;
     }
-
-
 }

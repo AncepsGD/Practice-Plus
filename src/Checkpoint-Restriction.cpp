@@ -3,8 +3,10 @@
 
 using namespace geode::prelude;
 
-class $modify(StackableCheckpoints, PlayLayer) {
-    void markCheckpoint() {
+class $modify(StackableCheckpoints, PlayLayer)
+{
+    void markCheckpoint()
+    {
         m_tryPlaceCheckpoint = false;
         PlayLayer::markCheckpoint();
     }

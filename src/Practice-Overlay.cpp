@@ -1,5 +1,6 @@
 #include <Geode/Geode.hpp>
 #include <Geode/modify/PlayLayer.hpp>
+#include <string>
 
 using namespace geode::prelude;
 
@@ -8,59 +9,109 @@ class $modify(MyPlayLayer, PlayLayer)
     struct Fields
     {
         CCLayer *uiLayer = nullptr;
-        CCLayerColor *flashZ = nullptr;
-        CCLayerColor *flashX = nullptr;
-        CCLayerColor *flashC = nullptr;
+        CCLabelBMFont *respawnLabel = nullptr;
+        float respawnLabelTimer = 0.0f;
         int lastCheckpointCount = 0;
     };
+
+    bool isPracticeMode() const
+    {
+        return m_isPracticeMode;
+    }
+
+    bool isOverlayEnabled() const
+    {
+        if (auto *mod = Mod::get())
+            return mod->getSettingValue<bool>("practice-overlay-enabled");
+
+        return true;
+    }
 
     bool init(GJGameLevel *level, bool useReplay, bool dontCreateObjects)
     {
         if (!PlayLayer::init(level, useReplay, dontCreateObjects))
             return false;
 
-        auto f = this->getField<Fields>();
-        f->lastCheckpointCount = 0;
+        auto &f = this->m_fields;
+        f->lastCheckpointCount = m_checkpointArray ? m_checkpointArray->count() : 0;
+
+        createPracticeHUD();
+        updateOverlayVisibility();
+
+        this->addEventListener(
+            KeybindSettingPressedEventV3(Mod::get(), "cycle-respawn-time"),
+            [this](Keybind const &, bool down, bool repeat, double)
+            {
+                if (down && !repeat && isPracticeMode())
+                    this->showRespawnLabelForTwoSeconds();
+
+                return ListenerResult::Propagate;
+            });
+
         return true;
     }
 
-    void triggerFlash(CCLayerColor *flash)
+    void togglePracticeMode(bool practiceMode)
     {
-        if (!flash)
+        PlayLayer::togglePracticeMode(practiceMode);
+
+        auto &f = this->m_fields;
+        f->lastCheckpointCount = m_checkpointArray ? m_checkpointArray->count() : 0;
+
+        updateOverlayVisibility();
+    }
+
+    void updateOverlayVisibility()
+    {
+        auto &f = this->m_fields;
+        if (!f->uiLayer)
             return;
 
-        flash->stopAllActions();
-        flash->setOpacity(0);
+        bool shouldShow = isPracticeMode() && isOverlayEnabled();
+        if (f->uiLayer->isVisible() != shouldShow)
+            f->uiLayer->setVisible(shouldShow);
+    }
 
-        flash->runAction(CCSequence::create(
-            CCFadeTo::create(0.05f, 140),
-            CCFadeTo::create(0.15f, 0),
-            nullptr));
+    std::string getRespawnLabelText()
+    {
+        int index = Mod::get()->getSettingValue<int>("respawn-active-index");
+
+        switch (index)
+        {
+        case 0:
+            return "0s";
+        case 1:
+            return "0.5s";
+        default:
+            return "0.5s";
+        }
+    }
+
+    void showRespawnLabelForTwoSeconds()
+    {
+        auto &f = this->m_fields;
+        if (!f->respawnLabel)
+            return;
+
+        f->respawnLabel->setString(getRespawnLabelText().c_str());
+        f->respawnLabelTimer = 2.0f;
     }
 
     void createPracticeHUD()
     {
-        auto f = this->getField<Fields>();
+        auto &f = this->m_fields;
         if (f->uiLayer)
             return;
 
         f->uiLayer = CCLayer::create();
+        f->uiLayer->setVisible(false);
         this->addChild(f->uiLayer, 9999);
 
         float startX = 10.f;
         float yPos = 25.f;
         float spacing = 25.f;
 
-        auto makeFlash = [&](float x)
-        {
-            auto flash = CCLayerColor::create({255, 255, 0, 0});
-            flash->setContentSize({22.f, 22.f});
-            flash->setPosition({x, yPos - 12.f});
-            f->uiLayer->addChild(flash);
-            return flash;
-        };
-
-        auto addColumn = [&](const char *key, const char *sprite, int index, CCLayerColor *&out)
+        auto addColumn = [&](const char *key, const char *sprite, int index, CCLabelBMFont **labelOut = nullptr)
         {
             float x = startX + spacing * index;
 
@@ -80,46 +131,47 @@ class $modify(MyPlayLayer, PlayLayer)
             label->setPosition({10.f, -6.f});
             node->addChild(label);
 
-            out = makeFlash(x + 10.f);
+            if (labelOut)
+                *labelOut = label;
         };
 
-        addColumn("Z", "add_checkpoint.png"_spr, 0, f->flashZ);
-        addColumn("X", "remove_checkpoint.png"_spr, 1, f->flashX);
-        addColumn("C", "respawn_time_cycle.png"_spr, 2, f->flashC);
+        addColumn("Z", "add_checkpoint.png"_spr, 0);
+        addColumn("X", "remove_checkpoint.png"_spr, 1);
+        addColumn("C", "respawn_time_cycle.png"_spr, 2, &f->respawnLabel);
     }
 
     void update(float dt)
     {
         PlayLayer::update(dt);
 
-        auto f = this->getField<Fields>();
+        auto &f = this->m_fields;
         if (!f->uiLayer)
             return;
+
+        updateOverlayVisibility();
+
+        if (!isPracticeMode())
+            return;
+
+        if (f->respawnLabelTimer > 0.0f)
+        {
+            f->respawnLabelTimer -= dt;
+            if (f->respawnLabelTimer <= 0.0f && f->respawnLabel)
+                f->respawnLabel->setString("C");
+        }
 
         int current = m_checkpointArray ? m_checkpointArray->count() : 0;
 
         if (current != f->lastCheckpointCount)
-        {
-            if (current > f->lastCheckpointCount)
-                triggerFlash(f->flashZ);
-            else
-                triggerFlash(f->flashX);
-
             f->lastCheckpointCount = current;
-        }
     }
 
     void resetLevel()
     {
         PlayLayer::resetLevel();
 
-        auto f = this->getField<Fields>();
-
-        if (f->uiLayer)
-            triggerFlash(f->flashC);
-        else
-            createPracticeHUD();
-
-        f->lastCheckpointCount = 0;
+        auto &f = this->m_fields;
+        f->lastCheckpointCount = m_checkpointArray ? m_checkpointArray->count() : 0;
+        updateOverlayVisibility();
     }
 };
