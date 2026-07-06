@@ -1,6 +1,6 @@
-# Practice+
+# Practice Plus
 
-Practice+ expands Practice Mode with configurable checkpoints, visual customization, and practice-related tools.
+Practice Plus expands Practice Mode with configurable checkpoints, visual customization, and practice-related tools.
 
 ## Features
 
