@@ -8,13 +8,13 @@
   },
   "id": "anceps.practiceplus",
   "name": "Practice Plus",
-  "version": "v1.0.1",
+  "version": "v1.1.0",
   "developers": ["Anceps", "Vanouper"],
   "description": "Expand Practice like never before :)",
 
   "dependencies": {
-    "hiimjasmine00.optional_settings": "v2.0.0",
-    "geode.node-ids": "v1.23.3"
+    "hiimjasmine00.optional_settings": ">=v2.0.0",
+    "geode.node-ids": ">=v1.23.3"
   },
 
   "resources": {
@@ -31,16 +31,14 @@
     "source": "https://github.com/AncepsGD/Practice-Plus"
   },
 
-  "tags": [
-    "universal",
-    "gameplay",
-    "offline",
-    "enhancement",
-    "utility",
-    "customization"
-  ],
+  "tags": ["gameplay", "customization", "utility", "offline"],
 
   "settings": {
+    "checkpoint-appearance-title": {
+      "name": "Checkpoint Appearance",
+      "type": "title"
+    },
+
     "custom-checkpoints-enabled": {
       "name": "Custom Checkpoints",
       "description": "Enable custom checkpoint visuals in practice mode.",
@@ -53,7 +51,9 @@
       "description": "Shape used for custom checkpoints.",
       "type": "string",
       "default": "diamond",
-      "one-of": ["diamond", "circle", "square", "x"]
+      "one-of": ["diamond", "circle", "square", "x"],
+      "enable-if": "custom-checkpoints-enabled",
+      "enable-if-description": "Requires Custom Checkpoints"
     },
 
     "checkpoint-scale": {
@@ -62,7 +62,9 @@
       "type": "float",
       "default": 0.7,
       "min": 0.25,
-      "max": 4.0
+      "max": 4.0,
+      "enable-if": "custom-checkpoints-enabled",
+      "enable-if-description": "Requires Custom Checkpoints"
     },
 
     "checkpoint-opacity": {
@@ -71,42 +73,54 @@
       "type": "int",
       "default": 255,
       "min": 25,
-      "max": 255
+      "max": 255,
+      "enable-if": "custom-checkpoints-enabled",
+      "enable-if-description": "Requires Custom Checkpoints"
     },
 
     "checkpoint-outer-color-enabled": {
       "name": "Enable Outer Color Override",
       "description": "Use a custom color for the outer checkpoint.",
       "type": "bool",
-      "default": true
+      "default": true,
+      "enable-if": "custom-checkpoints-enabled",
+      "enable-if-description": "Requires Custom Checkpoints"
     },
 
     "checkpoint-outer-color": {
       "name": "Outer Checkpoint Color",
       "description": "Color of the outer checkpoint ring.",
       "type": "color",
-      "default": "#FFFFFF"
+      "default": "#FFFFFF",
+      "enable-if": "custom-checkpoints-enabled && checkpoint-outer-color-enabled",
+      "enable-if-description": "Requires Custom Checkpoints + Outer Color Override"
     },
 
     "checkpoint-inner-color-enabled": {
       "name": "Enable Inner Color Override",
       "description": "Use a custom color for the inner checkpoint.",
       "type": "bool",
-      "default": true
+      "default": true,
+      "enable-if": "custom-checkpoints-enabled",
+      "enable-if-description": "Requires Custom Checkpoints"
     },
 
     "checkpoint-inner-color": {
       "name": "Inner Checkpoint Color",
       "description": "Color of the inner checkpoint fill.",
       "type": "color",
-      "default": "#FF4C00"
+      "default": "#FF4C00",
+      "enable-if": "custom-checkpoints-enabled && checkpoint-inner-color-enabled",
+      "enable-if-description": "Requires Custom Checkpoints + Inner Color Override"
     },
 
     "checkpoint-fade-enabled": {
       "name": "Fade With Placement Count",
       "description": "Each newly placed checkpoint becomes slightly more transparent.",
       "type": "bool",
-      "default": false
+      "default": false,
+      "enable-if": "custom-checkpoints-enabled",
+      "enable-if-description": "Requires Custom Checkpoints"
     },
 
     "checkpoint-fade-step": {
@@ -115,7 +129,9 @@
       "type": "int",
       "default": 90,
       "min": 0,
-      "max": 255
+      "max": 255,
+      "enable-if": "custom-checkpoints-enabled && checkpoint-fade-enabled",
+      "enable-if-description": "Requires Custom Checkpoints + Fade With Placement Count"
     },
 
     "checkpoint-fade-min": {
@@ -124,14 +140,18 @@
       "type": "int",
       "default": 0,
       "min": 0,
-      "max": 255
+      "max": 255,
+      "enable-if": "custom-checkpoints-enabled && checkpoint-fade-enabled",
+      "enable-if-description": "Requires Custom Checkpoints + Fade With Placement Count"
     },
 
     "checkpoint-fadein-enabled": {
       "name": "Fade-In on Placement",
       "description": "Checkpoints fade in when placed.",
       "type": "bool",
-      "default": true
+      "default": true,
+      "enable-if": "custom-checkpoints-enabled",
+      "enable-if-description": "Requires Custom Checkpoints"
     },
 
     "checkpoint-fadein-duration": {
@@ -140,7 +160,9 @@
       "type": "float",
       "default": 0.2,
       "min": 0.05,
-      "max": 3.0
+      "max": 3.0,
+      "enable-if": "custom-checkpoints-enabled && checkpoint-fadein-enabled",
+      "enable-if-description": "Requires Custom Checkpoints + Fade-In"
     },
 
     "checkpoint-image": {
@@ -156,21 +178,44 @@
             "description": "Image files"
           }
         ]
-      }
+      },
+      "enable-if": "custom-checkpoints-enabled",
+      "enable-if-description": "Requires Custom Checkpoints"
+    },
+
+    "checkpoint-sounds-title": {
+      "name": "Checkpoint Sounds",
+      "type": "title"
+    },
+
+    "checkpoint-sounds-enabled": {
+      "name": "Enable Checkpoint Sounds",
+      "description": "Toggle checkpoint placement and removal sounds on or off.",
+      "type": "bool",
+      "default": true
     },
 
     "checkpoint-sfx-path": {
       "name": "Checkpoint Place Sound",
       "description": "Sound played when placing a checkpoint.",
       "type": "file",
-      "default": "{mod_resources_dir}/checkpoint_place_sfx.ogg"
+      "default": "{mod_resources_dir}/checkpoint_place_sfx.ogg",
+      "enable-if": "checkpoint-sounds-enabled",
+      "enable-if-description": "Requires Checkpoint Sounds"
     },
 
     "checkpoint-remove-sfx-path": {
       "name": "Checkpoint Remove Sound",
       "description": "Sound played when removing a checkpoint.",
       "type": "file",
-      "default": "{mod_resources_dir}/checkpoint_remove_sfx.ogg"
+      "default": "{mod_resources_dir}/checkpoint_remove_sfx.ogg",
+      "enable-if": "checkpoint-sounds-enabled",
+      "enable-if-description": "Requires Checkpoint Sounds"
+    },
+
+    "checkpoint-behavior-title": {
+      "name": "Checkpoint Behavior",
+      "type": "title"
     },
 
     "checkpoint-limit": {
@@ -186,6 +231,11 @@
       "description": "Ignore the game's checkpoint placement restrictions.",
       "type": "bool",
       "default": true
+    },
+
+    "practice-mode-title": {
+      "name": "Practice Mode",
+      "type": "title"
     },
 
     "practice-overlay-enabled": {
@@ -208,37 +258,53 @@
       "type": "bool",
       "default": true
     },
+
+    "respawn-delay-title": {
+      "name": "Respawn Delay",
+      "type": "title"
+    },
+
     "practice-respawn-time-enabled": {
       "name": "Custom Respawn Delay",
       "description": "Enable custom respawn delay in practice mode.",
       "type": "bool",
       "default": true
     },
-    "respawn-active-index": {
-      "name": "Active Respawn Preset",
-      "description": "Current active respawn time preset.",
-      "type": "int",
-      "default": 1,
-      "min": 0,
-      "max": 1
+
+    "respawn-preset-def-enabled": {
+      "name": "Default Respawn",
+      "description": "Include the default respawn delay in the cycle.",
+      "type": "bool",
+      "default": true,
+      "enable-if": "practice-respawn-time-enabled",
+      "enable-if-description": "Requires Custom Respawn Delay"
     },
-    "respawn-preset-0": {
-      "type": "float",
-      "default": 0.0,
-      "min": 0.0,
-      "max": 2
+
+    "respawn-preset-zero-enabled": {
+      "name": "Instant Respawn",
+      "description": "Include instant respawn (0 delay) in the cycle.",
+      "type": "bool",
+      "default": true,
+      "enable-if": "practice-respawn-time-enabled",
+      "enable-if-description": "Requires Custom Respawn Delay"
     },
-    "respawn-preset-1": {
-      "type": "float",
-      "default": 0.5,
-      "min": 0.0,
-      "max": 2
+
+    "respawn-preset-inf-enabled": {
+      "name": "No Respawn",
+      "description": "Include disabled respawn (infinite delay) in the cycle.",
+      "type": "bool",
+      "default": true,
+      "enable-if": "practice-respawn-time-enabled",
+      "enable-if-description": "Requires Custom Respawn Delay"
     },
+
     "cycle-respawn-time": {
       "name": "Cycle Respawn Time",
       "description": "Cycles through respawn presets.",
       "type": "keybind",
-      "default": "C"
+      "default": "C",
+      "enable-if": "practice-respawn-time-enabled",
+      "enable-if-description": "Requires Custom Respawn Delay"
     }
   }
 }
