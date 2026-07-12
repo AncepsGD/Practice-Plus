@@ -11,7 +11,7 @@ namespace
     int g_activeRespawnPresetIndex = 0;
 }
 
-int& getActiveRespawnPresetIndexState()
+int &getActiveRespawnPresetIndexState()
 {
     return g_activeRespawnPresetIndex;
 }

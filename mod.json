@@ -8,13 +8,14 @@
   },
   "id": "anceps.practiceplus",
   "name": "Practice Plus",
-  "version": "v1.1.0",
+  "version": "v1.2.0",
   "developers": ["Anceps", "Vanouper"],
   "description": "Expand Practice like never before :)",
 
   "dependencies": {
     "hiimjasmine00.optional_settings": ">=v2.0.0",
-    "geode.node-ids": ">=v1.23.3"
+    "geode.node-ids": ">=v1.23.3",
+    "chizz.subtick-inputs-api": ">=v0.4.1"
   },
 
   "resources": {

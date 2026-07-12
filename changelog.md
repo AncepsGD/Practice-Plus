@@ -1,3 +1,10 @@
+# v1.2.0
+patched some crashes
+removed delays on instant respawn
+added subtick precision to checkpoints using subtick inputs api
+tweaked blue progress/checkmark
+added attempt, time, and xpos to the overlay
+
 # v1.1.0
 patched various crashes
 fixed dual vertical & horizontal desync

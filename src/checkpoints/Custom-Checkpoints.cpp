@@ -1,16 +1,22 @@
 #include <algorithm>
+#include <cstdint>
 #include <filesystem>
+#include <limits>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 #include <Geode/Geode.hpp>
+#include <Geode/modify/GJBaseGameLayer.hpp>
 #include <Geode/modify/PlayLayer.hpp>
 #include <Geode/modify/PlayerObject.hpp>
+
+#include <chizz.subtick-inputs-api/include/SubtickInputs.hpp>
 
 #include "CheckpointHelpers.hpp"
 
 using namespace geode::prelude;
+using namespace subtickinputs::prelude;
 
 namespace
 {
@@ -32,13 +38,31 @@ namespace
         return value;
     }
 
+    bool isPotentiallyValidPointer(void const *ptr)
+    {
+        if (!ptr)
+            return false;
+
+        auto value = reinterpret_cast<uintptr_t>(ptr);
+        if (value <= 0x1000)
+            return false;
+
+        if (value == std::numeric_limits<uintptr_t>::max() || value == std::numeric_limits<uintptr_t>::max() - 1)
+            return false;
+
+        if ((value >> 48) == 0xFFFF)
+            return false;
+
+        return true;
+    }
+
     bool isValidCheckpointPhysicalObject(CheckpointObject *checkpoint)
     {
-        if (!checkpoint)
+        if (!isPotentiallyValidPointer(checkpoint))
             return false;
 
         auto *phys = checkpoint->m_physicalCheckpointObject;
-        if (!phys)
+        if (!isPotentiallyValidPointer(phys))
             return false;
 
         if (!phys->getParent() && !checkpoint->getParent())
@@ -48,11 +72,37 @@ namespace
     }
 }
 
+class $modify(SubtickCheckpointInputsGameLayer, GJBaseGameLayer)
+{
+    void processQueuedButtons(float dt, bool clearInputQueue)
+    {
+        if (!useVanilla())
+            inputs::processInputs(dt);
+
+        GJBaseGameLayer::processQueuedButtons(dt, clearInputQueue);
+    }
+};
+
 class $modify(CustomCheckpointsPlayLayer, PlayLayer)
 {
+    struct CheckpointCommand
+    {
+        enum Type
+        {
+            Add,
+            Remove,
+            Load,
+            Reset,
+        } type = Add;
+
+        CheckpointObject *checkpoint = nullptr;
+        bool isNewPlacement = false;
+    };
+
     struct Fields
     {
         int placementIndex = 0;
+        std::vector<CheckpointCommand> checkpointQueue;
     };
 
     struct Settings
@@ -70,6 +120,23 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
 
         std::filesystem::path checkpointImage;
     };
+
+    bool isCheckpointTracked(CheckpointObject *checkpoint) const
+    {
+        if (!isPotentiallyValidPointer(checkpoint))
+            return false;
+
+        if (!m_checkpointArray)
+            return false;
+
+        for (unsigned i = 0; i < m_checkpointArray->count(); ++i)
+        {
+            if (m_checkpointArray->objectAtIndex(i) == checkpoint)
+                return true;
+        }
+
+        return false;
+    }
 
     static Settings getSettings()
     {
@@ -107,7 +174,7 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
         if (!node)
             return 255u;
 
-        if (auto *rgba = typeinfo_cast<cocos2d::CCRGBAProtocol *>(node))
+        if (auto *rgba = geode::cast::typeinfo_cast<cocos2d::CCRGBAProtocol *>(node))
             return static_cast<unsigned>(rgba->getOpacity());
 
         return 255u;
@@ -127,7 +194,7 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
         if (!node || isOurOverlayNode(node))
             return;
 
-        if (auto *rgba = typeinfo_cast<cocos2d::CCRGBAProtocol *>(node))
+        if (auto *rgba = geode::cast::typeinfo_cast<cocos2d::CCRGBAProtocol *>(node))
             rgba->setOpacity(0);
 
         node->setVisible(false);
@@ -138,7 +205,7 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
         if (!node)
             return;
 
-        if (auto *rgba = typeinfo_cast<cocos2d::CCRGBAProtocol *>(node))
+        if (auto *rgba = geode::cast::typeinfo_cast<cocos2d::CCRGBAProtocol *>(node))
             rgba->setOpacity(opacity);
 
         node->setVisible(opacity != 0);
@@ -165,7 +232,7 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
         if (!node)
             return;
 
-        if (auto *rgba = typeinfo_cast<cocos2d::CCRGBAProtocol *>(node))
+        if (auto *rgba = geode::cast::typeinfo_cast<cocos2d::CCRGBAProtocol *>(node))
         {
             auto opacity = rgba->getOpacity();
             node->setVisible(opacity != 0);
@@ -201,22 +268,24 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
 
     static void hideCheckpointVisuals(CheckpointObject *checkpoint)
     {
-        if (!checkpoint)
+        if (!isPotentiallyValidPointer(checkpoint))
             return;
 
         auto *phys = checkpoint->m_physicalCheckpointObject;
 
-        if (auto *rgba = typeinfo_cast<cocos2d::CCRGBAProtocol *>(checkpoint))
+        if (auto *rgba = geode::cast::typeinfo_cast<cocos2d::CCRGBAProtocol *>(checkpoint))
             rgba->setOpacity(0);
         checkpoint->setVisible(false);
 
-        if (!phys)
+        if (!isPotentiallyValidPointer(phys))
             return;
 
-        if (auto *rgba = typeinfo_cast<cocos2d::CCRGBAProtocol *>(phys))
+        if (auto *rgba = geode::cast::typeinfo_cast<cocos2d::CCRGBAProtocol *>(phys))
             rgba->setOpacity(0);
         phys->setVisible(false);
-        phys->makeInvisible();
+
+        if (auto *parent = phys->getParent())
+            phys->makeInvisible();
 
         if (phys->m_colorSprite)
         {
@@ -327,14 +396,20 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
     {
         auto settings = getSettings();
 
-        if (!settings.enabled || !checkpoint)
+        if (!settings.enabled || !isPotentiallyValidPointer(checkpoint))
+            return;
+
+        if (!isNewPlacement && !isCheckpointTracked(checkpoint))
             return;
 
         if (!isValidCheckpointPhysicalObject(checkpoint))
             return;
 
         auto *phys = checkpoint->m_physicalCheckpointObject;
-        if (!phys)
+        if (!isPotentiallyValidPointer(phys))
+            return;
+
+        if (!phys->getParent() && !checkpoint->getParent())
             return;
 
         if (getCheckpointOverlayIds().contains(checkpoint))
@@ -482,25 +557,54 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
         }
     }
 
+    void commitCheckpointQueue()
+    {
+        auto settings = getSettings();
+        if (m_fields->checkpointQueue.empty())
+            return;
+
+        for (auto &command : m_fields->checkpointQueue)
+        {
+            switch (command.type)
+            {
+            case CheckpointCommand::Add:
+                decorateCheckpoint(command.checkpoint, command.isNewPlacement);
+                ++m_fields->placementIndex;
+                break;
+
+            case CheckpointCommand::Remove:
+                removeOverlayForCheckpoint(command.checkpoint);
+                break;
+
+            case CheckpointCommand::Load:
+                decorateCheckpoint(command.checkpoint, false);
+                break;
+
+            case CheckpointCommand::Reset:
+                clearAllCheckpointOverlays();
+                m_fields->placementIndex = 0;
+                break;
+            }
+        }
+
+        cleanupMissingCheckpointOverlays();
+
+        if (settings.fade)
+            refreshAllCheckpointOpacity(settings);
+
+        m_fields->checkpointQueue.clear();
+    }
+
     void storeCheckpoint(CheckpointObject *checkpoint)
     {
         PlayLayer::storeCheckpoint(checkpoint);
-        decorateCheckpoint(checkpoint, true);
-        ++m_fields->placementIndex;
-
-        auto settings = getSettings();
-        if (settings.fade)
-            refreshAllCheckpointOpacity(settings);
+        m_fields->checkpointQueue.push_back({CheckpointCommand::Add, checkpoint, true});
     }
 
     void loadFromCheckpoint(CheckpointObject *checkpoint)
     {
         PlayLayer::loadFromCheckpoint(checkpoint);
-        decorateCheckpoint(checkpoint, false);
-
-        auto settings = getSettings();
-        if (settings.fade)
-            refreshAllCheckpointOpacity(settings);
+        m_fields->checkpointQueue.push_back({CheckpointCommand::Load, checkpoint, false});
     }
 
     void postUpdate(float dt)
@@ -509,9 +613,11 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
 
         auto settings = getSettings();
         if (!settings.enabled || !m_checkpointArray)
+        {
+            commitCheckpointQueue();
             return;
+        }
 
-        bool anyDecorated = false;
         for (unsigned i = 0; i < m_checkpointArray->count(); ++i)
         {
             auto *checkpoint = static_cast<CheckpointObject *>(m_checkpointArray->objectAtIndex(i));
@@ -520,14 +626,10 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
 
             auto it = getCheckpointOverlayIds().find(checkpoint);
             if (it == getCheckpointOverlayIds().end())
-            {
-                decorateCheckpoint(checkpoint, false);
-                anyDecorated = true;
-            }
+                m_fields->checkpointQueue.push_back({CheckpointCommand::Load, checkpoint, false});
         }
 
-        if (settings.fade && anyDecorated)
-            refreshAllCheckpointOpacity(settings);
+        commitCheckpointQueue();
     }
 
     void clearAllCheckpointOverlays()
@@ -552,8 +654,11 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
 
     void resetLevel()
     {
+
         clearAllCheckpointOverlays();
         m_fields->placementIndex = 0;
+        m_fields->checkpointQueue.clear();
+
         PlayLayer::resetLevel();
     }
 
@@ -664,13 +769,8 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
 
     void removeAllCheckpoints()
     {
-        clearAllCheckpointOverlays();
         PlayLayer::removeAllCheckpoints();
-        m_fields->placementIndex = 0;
-
-        auto settings = getSettings();
-        if (settings.fade)
-            refreshAllCheckpointOpacity(settings);
+        m_fields->checkpointQueue.push_back({CheckpointCommand::Reset, nullptr, false});
     }
 
     void togglePracticeMode(bool practiceMode)
@@ -679,38 +779,28 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
 
         if (!practiceMode)
         {
-            clearAllCheckpointOverlays();
-            m_fields->placementIndex = 0;
+            m_fields->checkpointQueue.push_back({CheckpointCommand::Reset, nullptr, false});
             return;
         }
 
-        m_fields->placementIndex = 0;
         if (!m_checkpointArray)
             return;
 
         for (unsigned i = 0; i < m_checkpointArray->count(); ++i)
         {
             auto *checkpoint = static_cast<CheckpointObject *>(m_checkpointArray->objectAtIndex(i));
-            decorateCheckpoint(checkpoint, false);
-            ++m_fields->placementIndex;
-        }
+            if (!checkpoint)
+                continue;
 
-        auto settings = getSettings();
-        if (settings.fade)
-            refreshAllCheckpointOpacity(settings);
+            m_fields->checkpointQueue.push_back({CheckpointCommand::Load, checkpoint, false});
+        }
     }
 
     void removeCheckpoint(bool p0)
     {
         auto *checkpoint = getCheckpointToRemove(p0);
-        removeOverlayForCheckpoint(checkpoint);
-
         PlayLayer::removeCheckpoint(p0);
-        cleanupMissingCheckpointOverlays();
-
-        auto settings = getSettings();
-        if (settings.fade)
-            refreshAllCheckpointOpacity(settings);
+        m_fields->checkpointQueue.push_back({CheckpointCommand::Remove, checkpoint, false});
     }
 };
 

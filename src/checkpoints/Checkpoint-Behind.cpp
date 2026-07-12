@@ -1,12 +1,24 @@
 #include <Geode/Geode.hpp>
 #include <Geode/modify/PlayLayer.hpp>
 
+#include <cstdint>
+#include <limits>
+
 using namespace geode::prelude;
 
 static constexpr int kCheckpointZ = 58;
 
 namespace
 {
+    bool isPointerUsable(void const *ptr)
+    {
+        if (!ptr)
+            return false;
+
+        auto value = reinterpret_cast<std::uintptr_t>(ptr);
+        return value != std::numeric_limits<std::uintptr_t>::max();
+    }
+
     bool isCheckpointBehindEnabled()
     {
         if (auto *mod = Mod::get())
@@ -30,11 +42,11 @@ namespace
 
     void applyZOrder(CheckpointObject *checkpoint, PlayLayer *layer)
     {
-        if (!checkpoint || !layer)
+        if (!isPointerUsable(checkpoint) || !layer)
             return;
 
         auto *phys = checkpoint->m_physicalCheckpointObject;
-        if (!phys)
+        if (!isPointerUsable(phys))
             return;
 
         auto *objectLayer = layer->m_objectLayer;

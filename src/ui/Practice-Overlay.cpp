@@ -1,10 +1,20 @@
 #include <Geode/Geode.hpp>
 #include <Geode/modify/PlayLayer.hpp>
+#include <algorithm>
+#include <chrono>
 #include <string>
+#include <vector>
 
 using namespace geode::prelude;
 
 int &getActiveRespawnPresetIndexState();
+
+struct OverlayColumn
+{
+    CCNode *node = nullptr;
+    CCSprite *icon = nullptr;
+    CCLabelBMFont *label = nullptr;
+};
 
 class $modify(MyPlayLayer, PlayLayer)
 {
@@ -16,6 +26,20 @@ class $modify(MyPlayLayer, PlayLayer)
         int lastCheckpointCount = 0;
         int lastRespawnPresetIndex = -1;
         bool lastRespawnEnabled = false;
+
+        CCLabelBMFont *sessionLabel = nullptr;
+        CCNode *sessionColumnNode = nullptr;
+        float sessionColumnBaseX = 0.0f;
+        std::chrono::steady_clock::time_point lastResumeTime;
+        double accumulatedSeconds = 0.0;
+        bool sessionRunning = false;
+        bool sessionPaused = false;
+
+        CCLabelBMFont *attemptsLabel = nullptr;
+        int attemptCount = 0;
+
+        CCLabelBMFont *xPosLabel = nullptr;
+        std::vector<OverlayColumn> overlayColumns;
     };
 
     bool isPracticeMode() const
@@ -31,6 +55,156 @@ class $modify(MyPlayLayer, PlayLayer)
         return true;
     }
 
+    void startSessionTimer()
+    {
+        auto &f = this->m_fields;
+        f->lastResumeTime = std::chrono::steady_clock::now();
+        f->sessionPaused = false;
+    }
+
+    void pauseSessionTimer(bool byDeath = false)
+    {
+        auto &f = this->m_fields;
+        if (!f->sessionRunning)
+            return;
+
+        if (!f->sessionPaused)
+        {
+            auto now = std::chrono::steady_clock::now();
+            auto delta = std::chrono::duration<double>(now - f->lastResumeTime).count();
+            f->accumulatedSeconds += delta;
+            f->sessionPaused = true;
+        }
+    }
+
+    void resumeSessionTimer(bool byDeath = false)
+    {
+        auto &f = this->m_fields;
+        if (!f->sessionRunning || !f->sessionPaused)
+            return;
+
+        startSessionTimer();
+    }
+
+    void syncSessionTimerWithPlayerState()
+    {
+        auto &f = this->m_fields;
+        if (!f->sessionRunning)
+            return;
+
+        (void)f;
+    }
+
+    void updateSessionLabel()
+    {
+        auto &f = this->m_fields;
+        if (!f->sessionRunning || f->sessionPaused || !f->sessionLabel)
+            return;
+
+        auto now = std::chrono::steady_clock::now();
+        auto liveDelta = std::chrono::duration<double>(now - f->lastResumeTime).count();
+        double total = f->accumulatedSeconds + liveDelta;
+
+        int hours = (int)(total / 3600);
+        int minutes = ((int)total % 3600) / 60;
+        int seconds = (int)total % 60;
+
+        std::string label;
+        if (hours > 0)
+            label += std::to_string(hours) + "h";
+        if (minutes > 0)
+        {
+            if (!label.empty())
+                label += " ";
+            label += std::to_string(minutes) + "m";
+        }
+        if (seconds > 0 || label.empty())
+        {
+            if (!label.empty())
+                label += " ";
+            label += std::to_string(seconds) + "s";
+        }
+
+        f->sessionLabel->setString(label.c_str());
+        updateOverlayLayout();
+    }
+
+    void updateAttemptsLabel()
+    {
+        auto &f = this->m_fields;
+        if (!f->attemptsLabel)
+            return;
+
+        f->attemptsLabel->setString(std::to_string(f->attemptCount).c_str());
+        updateOverlayLayout();
+    }
+
+    void updatePositionLabel()
+    {
+        auto &f = this->m_fields;
+        if (!f->xPosLabel || !m_player1)
+            return;
+
+        int x = static_cast<int>(m_player1->getPositionX());
+        f->xPosLabel->setString(std::to_string(x).c_str());
+        updateOverlayLayout();
+    }
+
+    void updateOverlayLayout()
+    {
+        auto &f = this->m_fields;
+        if (f->overlayColumns.empty())
+            return;
+
+        auto *director = CCDirector::sharedDirector();
+        if (!director)
+            return;
+
+        const float leftInset = 10.0f;
+        const float spacing = 12.0f;
+        const float baseLabelScale = 0.38f;
+        const float baseIconScale = 0.45f;
+        const float minScale = 0.55f;
+
+        float availableWidth = std::max(120.0f, director->getWinSize().width - leftInset - 10.0f);
+        std::vector<float> columnWidths;
+        float totalWidth = 0.0f;
+
+        for (auto &column : f->overlayColumns)
+        {
+            if (!column.node || !column.label || !column.icon)
+                continue;
+
+            float labelWidth = column.label->getContentSize().width * baseLabelScale;
+            float iconWidth = column.icon->getContentSize().width * baseIconScale;
+            float width = std::max(26.0f, std::max(labelWidth, iconWidth) + 10.0f);
+            columnWidths.push_back(width);
+            totalWidth += width;
+        }
+
+        if (columnWidths.size() > 1)
+            totalWidth += spacing * (static_cast<float>(columnWidths.size()) - 1.0f);
+
+        float scale = 1.0f;
+        if (totalWidth > availableWidth)
+            scale = std::max(minScale, availableWidth / totalWidth);
+
+        float currentX = leftInset;
+        size_t visibleIndex = 0;
+        for (auto &column : f->overlayColumns)
+        {
+            if (!column.node || !column.label || !column.icon)
+                continue;
+
+            float width = columnWidths.empty() ? 26.0f : columnWidths[visibleIndex] * scale;
+            column.node->setPositionX(currentX);
+            column.label->setScale(baseLabelScale * scale);
+            column.icon->setScale(baseIconScale * scale);
+            currentX += width + spacing * scale;
+            visibleIndex += 1;
+        }
+    }
+
     bool init(GJGameLevel *level, bool useReplay, bool dontCreateObjects)
     {
         if (!PlayLayer::init(level, useReplay, dontCreateObjects))
@@ -39,9 +213,16 @@ class $modify(MyPlayLayer, PlayLayer)
         auto &f = this->m_fields;
         f->lastCheckpointCount = m_checkpointArray ? m_checkpointArray->count() : 0;
 
+        f->accumulatedSeconds = 0.0;
+        f->sessionRunning = true;
+        f->sessionPaused = false;
+        f->attemptCount = 0;
+        startSessionTimer();
+
         createPracticeHUD();
         updateOverlayVisibility();
         refreshRespawnLabel(true);
+        updateAttemptsLabel();
         this->schedule(schedule_selector(MyPlayLayer::updateRespawnLabel), 0.0f);
 
         this->addEventListener(
@@ -187,21 +368,20 @@ class $modify(MyPlayLayer, PlayLayer)
 
         float startX = 10.f;
         float yPos = 25.f;
-        float spacing = 25.f;
 
-        auto addColumn = [&](const char *key, const char *sprite, int index, CCLabelBMFont **labelOut = nullptr)
+        auto addColumn = [&](const char *key, const char *sprite, float x, CCLabelBMFont **labelOut = nullptr) -> CCNode *
         {
-            float x = startX + spacing * index;
-
             auto node = CCNode::create();
             node->setPosition({x, yPos});
             f->uiLayer->addChild(node);
 
-            if (auto icon = CCSprite::create(sprite))
+            CCSprite *icon = nullptr;
+            if (auto spriteNode = CCSprite::create(sprite))
             {
-                icon->setScale(0.45f);
-                icon->setPosition({10.f, 6.f});
-                node->addChild(icon);
+                spriteNode->setScale(0.45f);
+                spriteNode->setPosition({10.f, 6.f});
+                node->addChild(spriteNode);
+                icon = spriteNode;
             }
 
             auto label = CCLabelBMFont::create(key, "bigFont.fnt");
@@ -211,11 +391,20 @@ class $modify(MyPlayLayer, PlayLayer)
 
             if (labelOut)
                 *labelOut = label;
+
+            f->overlayColumns.push_back({node, icon, label});
+            return node;
         };
 
-        addColumn("Z", "add_checkpoint.png"_spr, 0);
-        addColumn("X", "remove_checkpoint.png"_spr, 1);
-        addColumn("C", "respawn_time_cycle.png"_spr, 2, &f->respawnLabel);
+        addColumn("Z", "add_checkpoint.png"_spr, startX);
+        addColumn("X", "remove_checkpoint.png"_spr, startX);
+        addColumn("C", "respawn_time_cycle.png"_spr, startX, &f->respawnLabel);
+        addColumn("0", "attempt_count.png"_spr, startX, &f->attemptsLabel);
+        f->sessionColumnBaseX = startX;
+        f->sessionColumnNode = addColumn("0h 0m 0s", "time.png"_spr, startX, &f->sessionLabel);
+        addColumn("0", "position_x.png"_spr, startX, &f->xPosLabel);
+
+        updateOverlayLayout();
     }
 
     void updateRespawnLabel(float dt)
@@ -228,6 +417,9 @@ class $modify(MyPlayLayer, PlayLayer)
             return;
 
         refreshRespawnLabel();
+        syncSessionTimerWithPlayerState();
+        updateSessionLabel();
+        updatePositionLabel();
 
         if (f->respawnLabelTimer > 0.0f)
         {
@@ -246,12 +438,47 @@ class $modify(MyPlayLayer, PlayLayer)
             f->lastCheckpointCount = current;
     }
 
+    void destroyPlayer(PlayerObject *player, GameObject *object)
+    {
+        PlayLayer::destroyPlayer(player, object);
+    }
+
+    void pauseGame(bool unfocused)
+    {
+        pauseSessionTimer();
+        PlayLayer::pauseGame(unfocused);
+    }
+
+    void resume()
+    {
+        PlayLayer::resume();
+        resumeSessionTimer();
+    }
+
+    void levelComplete()
+    {
+        pauseSessionTimer();
+        auto &f = this->m_fields;
+        f->sessionRunning = false;
+        PlayLayer::levelComplete();
+    }
+
+    void onQuit()
+    {
+        pauseSessionTimer();
+        auto &f = this->m_fields;
+        f->sessionRunning = false;
+        PlayLayer::onQuit();
+    }
+
     void resetLevel()
     {
         PlayLayer::resetLevel();
 
         auto &f = this->m_fields;
         f->lastCheckpointCount = m_checkpointArray ? m_checkpointArray->count() : 0;
+        f->attemptCount += 1;
+        updateAttemptsLabel();
         updateOverlayVisibility();
     }
 };
