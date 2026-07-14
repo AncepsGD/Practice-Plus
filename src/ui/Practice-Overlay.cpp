@@ -92,7 +92,10 @@ class $modify(MyPlayLayer, PlayLayer)
         if (!f->sessionRunning)
             return;
 
-        (void)f;
+        if (m_isPaused && !f->sessionPaused)
+            pauseSessionTimer();
+        else if (!m_isPaused && f->sessionPaused)
+            resumeSessionTimer();
     }
 
     void updateSessionLabel()
