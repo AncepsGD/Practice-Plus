@@ -54,8 +54,10 @@ class $modify(MyLevelCell, LevelCell)
         bool isPracticeBeaten = (practicePercent == 100);
 
         bool inListView = false;
-        for (CCNode *p = this; p; p = p->getParent()) {
-            if (p->getID() == "list-view") {
+        for (CCNode *p = this; p; p = p->getParent())
+        {
+            if (p->getID() == "list-view")
+            {
                 inListView = true;
                 break;
             }
@@ -167,21 +169,21 @@ class $modify(MyLevelCell, LevelCell)
 
         auto wrapper = CCNode::create();
         wrapper->setContentSize(size);
-        wrapper->setAnchorPoint({0.5f, 0.5f});
+        wrapper->setAnchorPoint({.467f, .467f});
 
         if (shadow)
         {
             shadow->setColor(kShadowColor);
             shadow->setOpacity(160);
             shadow->setScale(kTextScale);
-            shadow->setAnchorPoint({0.5f, 0.5f});
+            shadow->setAnchorPoint({.467f, .467f});
             shadow->setPosition(size.width / 2.0f + 1.2f, size.height / 2.0f - 1.2f);
             wrapper->addChild(shadow, 0);
         }
 
         label->setColor(kProgressColor);
         label->setScale(kTextScale);
-        label->setAnchorPoint({0.5f, 0.5f});
+        label->setAnchorPoint({.467f, .467f});
         label->setPosition(size.width / 2.0f, size.height / 2.0f);
         wrapper->addChild(label, 1);
 
@@ -191,9 +193,11 @@ class $modify(MyLevelCell, LevelCell)
     static CCPoint computeBadgePosition(CCNode *cell, CCNode *container, CCLabelBMFont *targetLabel)
     {
         bool inListView = false;
-        for (CCNode *p = cell; p; p = p->getParent()) {
+        for (CCNode *p = cell; p; p = p->getParent())
+        {
             auto id = p->getID();
-            if (id == "list-view") {
+            if (id == "list-view")
+            {
                 inListView = true;
                 break;
             }
