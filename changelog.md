@@ -1,3 +1,7 @@
+# v1.2.1
+fixed timer freezing when pausing/unpausing
+resized practice progress text
+
 # v1.2.0
 patched some crashes
 removed delays on instant respawn
