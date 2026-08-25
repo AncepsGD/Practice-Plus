@@ -1,5 +1,5 @@
 {
-  "geode": "5.7.1",
+  "geode": "5.8.2",
   "gd": {
     "win": "2.2081",
     "android": "2.2081",
@@ -8,14 +8,13 @@
   },
   "id": "anceps.practiceplus",
   "name": "Practice Plus",
-  "version": "v1.2.1",
+  "version": "v1.3.0",
   "developers": ["Anceps", "Vanouper"],
   "description": "Expand Practice like never before :)",
 
   "dependencies": {
     "hiimjasmine00.optional_settings": ">=v2.0.0",
-    "geode.node-ids": ">=v1.23.3",
-    "chizz.subtick-inputs-api": ">=v0.4.1"
+    "geode.node-ids": ">=v1.23.3"
   },
 
   "resources": {
@@ -223,13 +222,20 @@
       "name": "Checkpoint Limit",
       "description": "Maximum number of practice checkpoints. Disabled if unset.",
       "type": "custom:hiimjasmine00.optional_settings/optional-int",
-      "default": 999,
+      "default": 300,
       "default-enabled": true
     },
 
     "checkpoint-restriction": {
       "name": "Bypass Placement Restrictions",
       "description": "Ignore the game's checkpoint placement restrictions.",
+      "type": "bool",
+      "default": true
+    },
+
+    "auto-respawn-on-checkpoint-delete": {
+      "name": "Respawn After Checkpoint Deletion",
+      "description": "Automatically respawn at the latest remaining checkpoint after deleting one.",
       "type": "bool",
       "default": true
     },
@@ -246,9 +252,25 @@
       "default": true
     },
 
+    "practice-overlay-frame": {
+      "name": "Show Frame Instead of X Position",
+      "description": "Show the player's current game frame in the practice overlay instead of X position.",
+      "type": "bool",
+      "default": false,
+      "enable-if": "practice-overlay-enabled",
+      "enable-if-description": "Requires Practice Overlay"
+    },
+    
     "practice-coins-enabled": {
       "name": "Practice Coins",
       "description": "Allow coins to be collected in practice mode.",
+      "type": "bool",
+      "default": true
+    },
+
+    "two-player-buffer-fix-enabled": {
+      "name": "2-Player Buffer Fix (EXPERIMENTAL)",
+      "description": "Keep buffered inputs independent for each player in dual mode.",
       "type": "bool",
       "default": true
     },
@@ -294,7 +316,7 @@
       "name": "No Respawn",
       "description": "Include disabled respawn (infinite delay) in the cycle.",
       "type": "bool",
-      "default": true,
+      "default": false,
       "enable-if": "practice-respawn-time-enabled",
       "enable-if-description": "Requires Custom Respawn Delay"
     },

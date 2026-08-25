@@ -1,3 +1,9 @@
+# v1.3
+- added 2 player buffer fix (EXPERIMENTAL. not 100% perfect atm.)
+- added option to reset upon checkpoint deletion
+- added option to use frames instead of x position
+- custom checkpoints are less laggy
+
 # v1.2.1
 - fixed timer freezing when pausing/unpausing
 - resized practice progress text

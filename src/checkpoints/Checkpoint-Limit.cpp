@@ -5,22 +5,23 @@ using namespace geode::prelude;
 
 class $modify(CheckpointLimitPlayLayer, PlayLayer)
 {
-    void storeCheckpoint(CheckpointObject *checkpointObject)
+    void storeCheckpoint(CheckpointObject* checkpointObject)
     {
-        if (!Mod::get()->getSettingValue<bool>("checkpoint-limit-enabled"))
+        PlayLayer::storeCheckpoint(checkpointObject);
+
+        if (!Mod::get()->getSettingValue<bool>("checkpoint-limit-enabled") || !m_checkpointArray)
         {
-            PlayLayer::storeCheckpoint(checkpointObject);
             return;
         }
 
-        PlayLayer::storeCheckpoint(checkpointObject);
+        auto limit = static_cast<unsigned int>(
+            std::max<int64_t>(Mod::get()->getSettingValue<int64_t>("checkpoint-limit"), 1)
+        );
 
-        int limit = static_cast<int>(Mod::get()->getSettingValue<int64_t>("checkpoint-limit"));
-        limit = std::max(limit, 1);
-
-        while (m_checkpointArray && m_checkpointArray->count() > static_cast<unsigned>(limit))
+        while (m_checkpointArray->count() > limit)
         {
-            PlayLayer::removeCheckpoint(true);
+            bool isLast = m_checkpointArray->count() == limit + 1;
+            PlayLayer::removeCheckpoint(isLast);
         }
     }
 };

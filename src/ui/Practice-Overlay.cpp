@@ -38,7 +38,7 @@ class $modify(MyPlayLayer, PlayLayer)
         CCLabelBMFont *attemptsLabel = nullptr;
         int attemptCount = 0;
 
-        CCLabelBMFont *xPosLabel = nullptr;
+        CCLabelBMFont *positionLabel = nullptr;
         std::vector<OverlayColumn> overlayColumns;
     };
 
@@ -142,14 +142,24 @@ class $modify(MyPlayLayer, PlayLayer)
         updateOverlayLayout();
     }
 
+    bool isFrameDisplayEnabled() const
+    {
+        if (auto *mod = Mod::get())
+            return mod->getSettingValue<bool>("practice-overlay-frame");
+
+        return false;
+    }
+
     void updatePositionLabel()
     {
         auto &f = this->m_fields;
-        if (!f->xPosLabel || !m_player1)
+        if (!f->positionLabel || !m_player1)
             return;
 
-        int x = static_cast<int>(m_player1->getPositionX());
-        f->xPosLabel->setString(std::to_string(x).c_str());
+        int value = isFrameDisplayEnabled()
+            ? m_tickIndex
+            : static_cast<int>(m_player1->getPositionX());
+        f->positionLabel->setString(std::to_string(value).c_str());
         updateOverlayLayout();
     }
 
@@ -405,7 +415,7 @@ class $modify(MyPlayLayer, PlayLayer)
         addColumn("0", "attempt_count.png"_spr, startX, &f->attemptsLabel);
         f->sessionColumnBaseX = startX;
         f->sessionColumnNode = addColumn("0h 0m 0s", "time.png"_spr, startX, &f->sessionLabel);
-        addColumn("0", "position_x.png"_spr, startX, &f->xPosLabel);
+        addColumn("0", "position_x.png"_spr, startX, &f->positionLabel);
 
         updateOverlayLayout();
     }

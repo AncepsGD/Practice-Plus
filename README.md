@@ -13,12 +13,11 @@ Practice Plus expands Practice Mode with configurable checkpoints, visual custom
 - Practice coins toggle (enable coin collection in Practice Mode)
 - Optional checkpoint limit system
 - Placement and removal sound effects
-- Ingame [Practice Mode List](https://practicemodelist.pages.dev/) integration; view the list within Geometry Dash
 
 ## Dependencies
 
-- `hiimjasmine00.optional_settings` `v2.0.0`
-- `geode.node-ids` `v1.23.3`
+<mod:hiimjasmine00.optional_settings>
+<mod:geode.node-ids>
 
 ### Possible Conflicts
 - Mods altering Practice Mode logic
