@@ -11,12 +11,9 @@
 #include <Geode/modify/PlayLayer.hpp>
 #include <Geode/modify/PlayerObject.hpp>
 
-#include <chizz.subtick-inputs-api/include/SubtickInputs.hpp>
-
 #include "CheckpointHelpers.hpp"
 
 using namespace geode::prelude;
-using namespace subtickinputs::prelude;
 
 namespace
 {
@@ -72,17 +69,6 @@ namespace
     }
 }
 
-class $modify(SubtickCheckpointInputsGameLayer, GJBaseGameLayer)
-{
-    void processQueuedButtons(float dt, bool clearInputQueue)
-    {
-        if (!useVanilla())
-            inputs::processInputs(dt);
-
-        GJBaseGameLayer::processQueuedButtons(dt, clearInputQueue);
-    }
-};
-
 class $modify(CustomCheckpointsPlayLayer, PlayLayer)
 {
     struct CheckpointCommand
@@ -103,6 +89,8 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
     {
         int placementIndex = 0;
         std::vector<CheckpointCommand> checkpointQueue;
+        unsigned lastCheckpointCount = 0;
+        bool checkpointArrayNeedsReconcile = true;
     };
 
     struct Settings
@@ -569,6 +557,8 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
             {
             case CheckpointCommand::Add:
                 decorateCheckpoint(command.checkpoint, command.isNewPlacement);
+                if (!getCheckpointOverlayIds().contains(command.checkpoint))
+                    m_fields->checkpointArrayNeedsReconcile = true;
                 ++m_fields->placementIndex;
                 break;
 
@@ -578,6 +568,8 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
 
             case CheckpointCommand::Load:
                 decorateCheckpoint(command.checkpoint, false);
+                if (!getCheckpointOverlayIds().contains(command.checkpoint))
+                    m_fields->checkpointArrayNeedsReconcile = true;
                 break;
 
             case CheckpointCommand::Reset:
@@ -618,15 +610,23 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
             return;
         }
 
-        for (unsigned i = 0; i < m_checkpointArray->count(); ++i)
+        auto checkpointCount = m_checkpointArray->count();
+        if (m_fields->checkpointArrayNeedsReconcile ||
+            checkpointCount != m_fields->lastCheckpointCount)
         {
-            auto *checkpoint = static_cast<CheckpointObject *>(m_checkpointArray->objectAtIndex(i));
-            if (!checkpoint)
-                continue;
+            for (unsigned i = 0; i < checkpointCount; ++i)
+            {
+                auto *checkpoint = static_cast<CheckpointObject *>(m_checkpointArray->objectAtIndex(i));
+                if (!checkpoint)
+                    continue;
 
-            auto it = getCheckpointOverlayIds().find(checkpoint);
-            if (it == getCheckpointOverlayIds().end())
-                m_fields->checkpointQueue.push_back({CheckpointCommand::Load, checkpoint, false});
+                auto it = getCheckpointOverlayIds().find(checkpoint);
+                if (it == getCheckpointOverlayIds().end())
+                    m_fields->checkpointQueue.push_back({CheckpointCommand::Load, checkpoint, false});
+            }
+
+            m_fields->lastCheckpointCount = checkpointCount;
+            m_fields->checkpointArrayNeedsReconcile = false;
         }
 
         commitCheckpointQueue();
@@ -658,6 +658,8 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
         clearAllCheckpointOverlays();
         m_fields->placementIndex = 0;
         m_fields->checkpointQueue.clear();
+        m_fields->lastCheckpointCount = 0;
+        m_fields->checkpointArrayNeedsReconcile = true;
 
         PlayLayer::resetLevel();
     }
@@ -771,6 +773,7 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
     {
         PlayLayer::removeAllCheckpoints();
         m_fields->checkpointQueue.push_back({CheckpointCommand::Reset, nullptr, false});
+        m_fields->checkpointArrayNeedsReconcile = true;
     }
 
     void togglePracticeMode(bool practiceMode)
@@ -780,6 +783,7 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
         if (!practiceMode)
         {
             m_fields->checkpointQueue.push_back({CheckpointCommand::Reset, nullptr, false});
+            m_fields->checkpointArrayNeedsReconcile = true;
             return;
         }
 
@@ -801,6 +805,7 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
         auto *checkpoint = getCheckpointToRemove(p0);
         PlayLayer::removeCheckpoint(p0);
         m_fields->checkpointQueue.push_back({CheckpointCommand::Remove, checkpoint, false});
+        m_fields->checkpointArrayNeedsReconcile = true;
     }
 };
 
