@@ -1,4 +1,4 @@
-# v1.3
+# v1.3.0
 - added 2 player buffer fix (EXPERIMENTAL. not 100% perfect atm.)
 - added option to reset upon checkpoint deletion
 - added option to use frames instead of x position
