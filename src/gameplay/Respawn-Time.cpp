@@ -21,6 +21,9 @@ class $modify(PracticeRespawnPlayLayer, PlayLayer)
     struct Fields
     {
         bool respawnScheduled = false;
+        bool resetToCheckpoint = false;
+        bool checkpointCountInitialized = false;
+        unsigned lastCheckpointCount = 0;
         int activePresetIndex = 0;
     };
 
@@ -133,12 +136,13 @@ class $modify(PracticeRespawnPlayLayer, PlayLayer)
         Mod::get()->setSettingValue<bool>("practice-respawn-time-enabled", true);
     }
 
-    void scheduleRespawn(float delay)
+    void scheduleRespawn(float delay, bool resetToCheckpoint = false)
     {
         if (m_fields->respawnScheduled)
             return;
 
         m_fields->respawnScheduled = true;
+        m_fields->resetToCheckpoint = resetToCheckpoint;
 
         this->scheduleOnce(
             schedule_selector(PracticeRespawnPlayLayer::triggerRespawn),
@@ -151,7 +155,10 @@ class $modify(PracticeRespawnPlayLayer, PlayLayer)
         if (m_isPracticeMode && getPreset() == RespawnPreset::Infinite)
             return;
 
-        PlayLayer::delayedResetLevel();
+        if (m_fields->resetToCheckpoint)
+            PlayLayer::resetLevel();
+        else
+            PlayLayer::delayedResetLevel();
     }
 
     void delayedResetLevel()
@@ -174,7 +181,38 @@ class $modify(PracticeRespawnPlayLayer, PlayLayer)
     {
         this->unschedule(schedule_selector(PracticeRespawnPlayLayer::triggerRespawn));
         m_fields->respawnScheduled = false;
+        m_fields->resetToCheckpoint = false;
+        m_fields->checkpointCountInitialized = false;
         PlayLayer::resetLevel();
+    }
+
+    void postUpdate(float dt)
+    {
+        PlayLayer::postUpdate(dt);
+
+        if (!m_checkpointArray)
+        {
+            m_fields->checkpointCountInitialized = false;
+            return;
+        }
+
+        auto checkpointCount = m_checkpointArray->count();
+        if (!m_fields->checkpointCountInitialized)
+        {
+            m_fields->lastCheckpointCount = checkpointCount;
+            m_fields->checkpointCountInitialized = true;
+            return;
+        }
+
+        bool checkpointWasRemoved = checkpointCount < m_fields->lastCheckpointCount;
+        m_fields->lastCheckpointCount = checkpointCount;
+
+        if (checkpointWasRemoved && m_isPracticeMode &&
+            Mod::get()->getSettingValue<bool>("auto-respawn-on-checkpoint-delete") &&
+            getPreset() != RespawnPreset::Infinite)
+        {
+            scheduleRespawn(getRespawnTime(), true);
+        }
     }
 
     void destroyPlayer(PlayerObject *player, GameObject *object)
@@ -206,6 +244,20 @@ class $modify(PracticeRespawnPlayLayer, PlayLayer)
 
         PlayLayer::destroyPlayer(player, object);
         scheduleRespawn(getRespawnTime());
+    }
+
+    void removeCheckpoint(bool first)
+    {
+        PlayLayer::removeCheckpoint(first);
+
+        if (!m_isPracticeMode ||
+            !Mod::get()->getSettingValue<bool>("auto-respawn-on-checkpoint-delete"))
+            return;
+
+        if (getPreset() == RespawnPreset::Infinite)
+            return;
+
+        scheduleRespawn(getRespawnTime(), true);
     }
 
     bool init(GJGameLevel *level, bool useReplay, bool dontCreateObjects)
