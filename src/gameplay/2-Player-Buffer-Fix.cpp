@@ -140,7 +140,7 @@ class $modify(DualInputBaseLayer, GJBaseGameLayer)
             otherPlayer->m_jumpBuffered = otherJumpBuffered;
             otherPlayer->m_holdingLeft = otherHoldingLeft;
             otherPlayer->m_holdingRight = otherHoldingRight;
-            otherPlayer->m_holdingButtons = std::move(otherHoldingButtons);
+            otherPlayer->m_holdingButtons = otherHoldingButtons;
         }
 
         if (state.replaying || flag == InputMask::None)
