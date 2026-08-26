@@ -1,5 +1,5 @@
 {
-  "geode": "5.8.2",
+  "geode": "5.9.0",
   "gd": {
     "win": "2.2081",
     "android": "2.2081",
@@ -8,7 +8,7 @@
   },
   "id": "anceps.practiceplus",
   "name": "Practice Plus",
-  "version": "v1.3.0",
+  "version": "v1.4.0",
   "developers": ["Anceps", "Vanouper"],
   "description": "Expand Practice like never before :)",
 
@@ -233,6 +233,13 @@
       "default": true
     },
 
+    "checkpoint-lock": {
+      "name": "Lock Latest Checkpoint",
+      "description": "Toggle the lock on the latest practice checkpoint.",
+      "type": "keybind",
+      "default": "V"
+    },
+
     "auto-respawn-on-checkpoint-delete": {
       "name": "Respawn After Checkpoint Deletion",
       "description": "Automatically respawn at the latest remaining checkpoint after deleting one.",
@@ -243,6 +250,13 @@
     "practice-mode-title": {
       "name": "Practice Mode",
       "type": "title"
+    },
+
+    "music-loop": {
+      "name": "Loop Music",
+      "description": "Loop level music while playing in practice mode.",
+      "type": "bool",
+      "default": true
     },
 
     "practice-overlay-enabled": {
@@ -268,8 +282,22 @@
       "default": true
     },
 
+    "no-death-effect": {
+      "name": "No Death Effect",
+      "description": "Prevent the death effect from playing when a player dies.",
+      "type": "bool",
+      "default": true
+    },
+
+    "confirm-practice-mode-exit": {
+      "name": "Confirm Practice Mode Exit",
+      "description": "Ask for confirmation before exiting practice mode.",
+      "type": "bool",
+      "default": true
+    },
+
     "two-player-buffer-fix-enabled": {
-      "name": "2-Player Buffer Fix (EXPERIMENTAL)",
+      "name": "2-Player Buffer Fix (VERY EXPERIMENTAL)",
       "description": "Keep buffered inputs independent for each player in dual mode.",
       "type": "bool",
       "default": true

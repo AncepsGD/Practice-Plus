@@ -47,8 +47,11 @@ namespace
         if (value == std::numeric_limits<uintptr_t>::max() || value == std::numeric_limits<uintptr_t>::max() - 1)
             return false;
 
-        if ((value >> 48) == 0xFFFF)
-            return false;
+        if constexpr (sizeof(uintptr_t) >= 8)
+        {
+            if ((value >> 48) == 0xFFFF)
+                return false;
+        }
 
         return true;
     }

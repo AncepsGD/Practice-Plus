@@ -1,3 +1,10 @@
+# v1.4.0
+- new confirmation pop-up for exiting practice mode (so you don't leave on accident!)
+- added a fully extensive no death effect setting
+- if you restart from 0, it now resets the time and attempt count
+- you can now lock checkpoints to prevent deleting ones you dont want deleted
+- added setting to loop the level music in practice mode
+
 # v1.3.0
 - added 2 player buffer fix (EXPERIMENTAL. not 100% perfect atm.)
 - added option to reset upon checkpoint deletion

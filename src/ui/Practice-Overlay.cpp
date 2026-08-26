@@ -142,6 +142,17 @@ class $modify(MyPlayLayer, PlayLayer)
         updateOverlayLayout();
     }
 
+    void resetAttemptAndTimeCounters()
+    {
+        auto &f = this->m_fields;
+        f->attemptCount = 0;
+        f->accumulatedSeconds = 0.0;
+        f->lastResumeTime = std::chrono::steady_clock::now();
+        f->sessionPaused = false;
+        updateAttemptsLabel();
+        updateSessionLabel();
+    }
+
     bool isFrameDisplayEnabled() const
     {
         if (auto *mod = Mod::get())
@@ -157,8 +168,8 @@ class $modify(MyPlayLayer, PlayLayer)
             return;
 
         int value = isFrameDisplayEnabled()
-            ? m_tickIndex
-            : static_cast<int>(m_player1->getPositionX());
+                        ? m_tickIndex
+                        : static_cast<int>(m_player1->getPositionX());
         f->positionLabel->setString(std::to_string(value).c_str());
         updateOverlayLayout();
     }
@@ -412,6 +423,7 @@ class $modify(MyPlayLayer, PlayLayer)
         addColumn("Z", "add_checkpoint.png"_spr, startX);
         addColumn("X", "remove_checkpoint.png"_spr, startX);
         addColumn("C", "respawn_time_cycle.png"_spr, startX, &f->respawnLabel);
+        addColumn("V", "lock-unlock.png"_spr, startX);
         addColumn("0", "attempt_count.png"_spr, startX, &f->attemptsLabel);
         f->sessionColumnBaseX = startX;
         f->sessionColumnNode = addColumn("0h 0m 0s", "time.png"_spr, startX, &f->sessionLabel);
@@ -484,12 +496,29 @@ class $modify(MyPlayLayer, PlayLayer)
         PlayLayer::onQuit();
     }
 
+    void removeAllCheckpoints()
+    {
+        PlayLayer::removeAllCheckpoints();
+    }
+
+    void removeCheckpoint(bool first)
+    {
+        PlayLayer::removeCheckpoint(first);
+    }
+
     void resetLevel()
     {
         PlayLayer::resetLevel();
 
         auto &f = this->m_fields;
         f->lastCheckpointCount = m_checkpointArray ? m_checkpointArray->count() : 0;
+
+        if (f->lastCheckpointCount == 0)
+        {
+            resetAttemptAndTimeCounters();
+            return;
+        }
+
         f->attemptCount += 1;
         updateAttemptsLabel();
         updateOverlayVisibility();
