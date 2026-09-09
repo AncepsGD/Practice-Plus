@@ -4,15 +4,39 @@ Practice Plus expands Practice Mode with configurable checkpoints, visual custom
 
 ## Features
 
-- Custom checkpoint visuals (shape, scale, opacity, inner & outer colors)
-- Optional custom image for checkpoints
-- Blue percentage & checkmark for practice mode progress
-- Toggle to render checkpoints behind the player for clarity
-- Fade-in animation on placement
-- Configurable respawn delay exclusively for practice mode after death
-- Practice coins toggle (enable coin collection in Practice Mode)
-- Optional checkpoint limit system
-- Placement and removal sound effects
+### Checkpoints
+
+- Set an optional checkpoint limit.
+- Bypass checkpoint placement restrictions.
+- Lock the latest checkpoint with a keybind.
+- Respawn at the latest remaining checkpoint after deleting one.
+- Configure checkpoint placement and removal sounds, including custom sound files.
+- Enable experimental checkpoint continuity to restore checkpoint state when reentering practice mode. This is disabled by default and is currently testing only.
+
+### Checkpoint appearance
+
+- Replace the default checkpoint visual.
+- Choose shape of checkpoints.
+- Adjust checkpoint scale and opacity.
+- Override the outer and inner checkpoint colors.
+- Fade checkpoints based on placement count.
+- Fade newly placed checkpoints in.
+- Show or hide the Player 2 checkpoint in dual mode.
+- Render checkpoints behind the player.
+
+### Practice mode
+
+- Display a practice overlay with either the player's X position or current frame.
+- Collect coins in practice mode.
+- Loop level music.
+- Turn off death effects.
+- Confirm before exiting practice mode.
+- Keep 2 player buffered inputs independent with the 2 Player Buffer Fix.
+
+### Respawn delay
+
+- Cycle through configurable respawn presets with a keybind.
+- Include default, instant, and no-respawn options in the cycle.
 
 ## Dependencies
 
