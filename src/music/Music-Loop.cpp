@@ -172,6 +172,18 @@ class $modify(PracticeMusicLoopPlayLayer, PlayLayer) {
         auto engine = FMODAudioEngine::sharedEngine();
         if (!engine) return;
 
+        const bool loopMusic = Mod::get()->getSettingValue<bool>("music-loop");
+        if (!loopMusic) {
+            m_fields->practiceAudio.stop();
+            if (!m_fields->gameplayPaused) {
+                engine->resumeMusic(kGameplayMusicChannel);
+            }
+            if (engine->m_backgroundMusicChannel) {
+                engine->m_backgroundMusicChannel->setMute(false);
+            }
+            return;
+        }
+
         engine->pauseMusic(kGameplayMusicChannel);
         if (engine->m_backgroundMusicChannel) {
             engine->m_backgroundMusicChannel->setMute(true);
@@ -198,7 +210,6 @@ class $modify(PracticeMusicLoopPlayLayer, PlayLayer) {
         }
 
         if (m_fields->restartCooldown > 0.f) return;
-        const bool loopMusic = Mod::get()->getSettingValue<bool>("music-loop");
         m_fields->practiceAudio.start(m_fields->resolvedAudioPath, engine->getBackgroundMusicVolume(), loopMusic);
         m_fields->restartCooldown = 1.f;
     }

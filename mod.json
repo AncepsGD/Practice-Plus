@@ -1,5 +1,5 @@
 {
-  "geode": "5.9.0",
+  "geode": "5.10.1",
   "gd": {
     "win": "2.2081",
     "android": "2.2081",
@@ -8,7 +8,7 @@
   },
   "id": "anceps.practiceplus",
   "name": "Practice Plus",
-  "version": "v1.4.0",
+  "version": "v1.5.0",
   "developers": ["Anceps", "Vanouper"],
   "description": "Expand Practice like never before :)",
 
@@ -34,6 +34,47 @@
   "tags": ["gameplay", "customization", "utility", "offline"],
 
   "settings": {
+    "checkpoint-behavior-title": {
+      "name": "Checkpoint Behavior",
+      "type": "title"
+    },
+
+    "checkpoint-continuity-enabled": {
+      "name": "Checkpoint Continuity (VERY UNSTABLE; TESTING ONLY)",
+      "description": "Restore checkpoint state when re-entering practice mode.",
+      "type": "bool",
+      "default": false
+    },
+
+    "checkpoint-limit": {
+      "name": "Checkpoint Limit",
+      "description": "Maximum number of practice checkpoints. Disabled if unset.",
+      "type": "custom:hiimjasmine00.optional_settings/optional-int",
+      "default": 300,
+      "default-enabled": true
+    },
+
+    "checkpoint-restriction": {
+      "name": "Bypass Placement Restrictions",
+      "description": "Ignore the game's checkpoint placement restrictions.",
+      "type": "bool",
+      "default": true
+    },
+
+    "checkpoint-lock": {
+      "name": "Lock Latest Checkpoint",
+      "description": "Toggle the lock on the latest practice checkpoint.",
+      "type": "keybind",
+      "default": "V"
+    },
+
+    "auto-respawn-on-checkpoint-delete": {
+      "name": "Respawn After Checkpoint Deletion",
+      "description": "Automatically respawn at the latest remaining checkpoint after deleting one.",
+      "type": "bool",
+      "default": true
+    },
+
     "checkpoint-appearance-title": {
       "name": "Checkpoint Appearance",
       "type": "title"
@@ -42,6 +83,13 @@
     "custom-checkpoints-enabled": {
       "name": "Custom Checkpoints",
       "description": "Enable custom checkpoint visuals in practice mode.",
+      "type": "bool",
+      "default": false
+    },
+
+    "player-2-checkpoints-enabled": {
+      "name": "Show Player 2 Checkpoints",
+      "description": "Display the second checkpoint marker in dual mode.",
       "type": "bool",
       "default": true
     },
@@ -213,40 +261,6 @@
       "enable-if-description": "Requires Checkpoint Sounds"
     },
 
-    "checkpoint-behavior-title": {
-      "name": "Checkpoint Behavior",
-      "type": "title"
-    },
-
-    "checkpoint-limit": {
-      "name": "Checkpoint Limit",
-      "description": "Maximum number of practice checkpoints. Disabled if unset.",
-      "type": "custom:hiimjasmine00.optional_settings/optional-int",
-      "default": 300,
-      "default-enabled": true
-    },
-
-    "checkpoint-restriction": {
-      "name": "Bypass Placement Restrictions",
-      "description": "Ignore the game's checkpoint placement restrictions.",
-      "type": "bool",
-      "default": true
-    },
-
-    "checkpoint-lock": {
-      "name": "Lock Latest Checkpoint",
-      "description": "Toggle the lock on the latest practice checkpoint.",
-      "type": "keybind",
-      "default": "V"
-    },
-
-    "auto-respawn-on-checkpoint-delete": {
-      "name": "Respawn After Checkpoint Deletion",
-      "description": "Automatically respawn at the latest remaining checkpoint after deleting one.",
-      "type": "bool",
-      "default": true
-    },
-
     "practice-mode-title": {
       "name": "Practice Mode",
       "type": "title"
@@ -256,7 +270,7 @@
       "name": "Loop Music",
       "description": "Loop level music while playing in practice mode.",
       "type": "bool",
-      "default": true
+      "default": false
     },
 
     "practice-overlay-enabled": {
@@ -297,10 +311,10 @@
     },
 
     "two-player-buffer-fix-enabled": {
-      "name": "2-Player Buffer Fix (VERY EXPERIMENTAL)",
+      "name": "2-Player Buffer Fix",
       "description": "Keep buffered inputs independent for each player in dual mode.",
       "type": "bool",
-      "default": false
+      "default": true
     },
 
     "checkpoint-behind-player": {

@@ -1,3 +1,9 @@
+# v1.5.0
+- 2 player buffer fix has been FINALIZED! no reported issues from me at least
+- added checkpoint continuity (VERY UNSTABLE; TESTING ONLY), which allows you to save progress after quitting a level
+- fixed the music loop setting so it's inactive when turned off
+- added option for visual player 2 checkpoints
+
 # v1.4.0
 - new confirmation pop-up for exiting practice mode (so you don't leave on accident!)
 - added a fully extensive no death effect setting

@@ -3,11 +3,20 @@
 #include <algorithm>
 #include <chrono>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 using namespace geode::prelude;
 
 int &getActiveRespawnPresetIndexState();
+
+struct PersistedPracticeSession
+{
+    double accumulatedSeconds = 0.0;
+    int attemptCount = 0;
+};
+
+static std::unordered_map<int, PersistedPracticeSession> s_persistedPracticeSessions;
 
 struct OverlayColumn
 {
@@ -237,10 +246,16 @@ class $modify(MyPlayLayer, PlayLayer)
         auto &f = this->m_fields;
         f->lastCheckpointCount = m_checkpointArray ? m_checkpointArray->count() : 0;
 
-        f->accumulatedSeconds = 0.0;
+        int levelID = m_level ? m_level->m_levelID.value() : -1;
+        auto savedSession = s_persistedPracticeSessions.find(levelID);
+        f->accumulatedSeconds = savedSession != s_persistedPracticeSessions.end()
+                                    ? savedSession->second.accumulatedSeconds
+                                    : 0.0;
         f->sessionRunning = true;
         f->sessionPaused = false;
-        f->attemptCount = 0;
+        f->attemptCount = savedSession != s_persistedPracticeSessions.end()
+                              ? savedSession->second.attemptCount
+                              : 0;
         startSessionTimer();
 
         createPracticeHUD();
@@ -485,6 +500,8 @@ class $modify(MyPlayLayer, PlayLayer)
         pauseSessionTimer();
         auto &f = this->m_fields;
         f->sessionRunning = false;
+        if (m_level)
+            s_persistedPracticeSessions.erase(m_level->m_levelID.value());
         PlayLayer::levelComplete();
     }
 
@@ -492,6 +509,12 @@ class $modify(MyPlayLayer, PlayLayer)
     {
         pauseSessionTimer();
         auto &f = this->m_fields;
+        if (m_level)
+        {
+            auto &savedSession = s_persistedPracticeSessions[m_level->m_levelID.value()];
+            savedSession.accumulatedSeconds = f->accumulatedSeconds;
+            savedSession.attemptCount = f->attemptCount;
+        }
         f->sessionRunning = false;
         PlayLayer::onQuit();
     }

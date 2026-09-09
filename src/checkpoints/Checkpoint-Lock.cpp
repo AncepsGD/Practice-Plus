@@ -196,4 +196,10 @@ class $modify(CheckpointLockPlayLayer, PlayLayer)
         PlayLayer::resetLevel();
         rebuildLockIcons();
     }
+
+    void onExit()
+    {
+        clearLocks();
+        PlayLayer::onExit();
+    }
 };

@@ -11,16 +11,6 @@ static bool isNoDeathEffectEnabled()
     return mod && mod->getSettingValue<bool>("no-death-effect");
 }
 
-static void forcePlayerVisible(PlayerObject* player)
-{
-    if (!player || !player->m_isDead)
-        return;
-    player->stopAllActions();
-    player->setVisible(true);
-    player->setOpacity(255);
-    player->m_isHidden = false;
-}
-
 class $modify(NoDeathEffectPlayerObject, PlayerObject) {
     void playDeathEffect() {
         if (!isNoDeathEffectEnabled()) {
@@ -38,18 +28,10 @@ class $modify(NoDeathEffectPlayerObject, PlayerObject) {
 
 class $modify(NoDeathEffectPlayLayer, PlayLayer) {
     void destroyPlayer(PlayerObject* player, GameObject* object) {
-        if (isNoDeathEffectEnabled()) {
-            if (m_player1)
-                m_player1->m_practiceDeathEffect = false;
-            if (m_player2)
-                m_player2->m_practiceDeathEffect = false;
-        }
+        if (isNoDeathEffectEnabled() && player)
+            player->m_practiceDeathEffect = false;
 
         PlayLayer::destroyPlayer(player, object);
-
-        if (isNoDeathEffectEnabled()) {
-            forcePlayerVisible(player);
-        }
     }
 };
 

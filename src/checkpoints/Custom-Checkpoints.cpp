@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <Geode/Geode.hpp>
+#include <Geode/binding/CheckpointGameObject.hpp>
 #include <Geode/modify/GJBaseGameLayer.hpp>
 #include <Geode/modify/PlayLayer.hpp>
 #include <Geode/modify/PlayerObject.hpp>
@@ -99,6 +100,7 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
     struct Settings
     {
         bool enabled = false;
+        bool player2Enabled = true;
         bool outerColor = false;
         bool innerColor = false;
         bool fade = false;
@@ -136,6 +138,7 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
         if (auto *mod = Mod::get())
         {
             s.enabled = mod->getSettingValue<bool>("custom-checkpoints-enabled");
+            s.player2Enabled = mod->getSettingValue<bool>("player-2-checkpoints-enabled");
             s.outerColor = mod->getSettingValue<bool>("checkpoint-outer-color-enabled");
             s.innerColor = mod->getSettingValue<bool>("checkpoint-inner-color-enabled");
             s.fade = mod->getSettingValue<bool>("checkpoint-fade-enabled");
@@ -291,6 +294,11 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
             phys->m_detailActionSprite->setVisible(false);
     }
 
+    static bool hasPlayer2Checkpoint(CheckpointObject *checkpoint, bool enabled)
+    {
+        return enabled && checkpoint && checkpoint->m_gameState.m_isDualMode && checkpoint->m_player2Checkpoint;
+    }
+
     static cocos2d::CCSprite *createSpriteFromPathOrFallback(
         std::filesystem::path const &path,
         geode::ZStringView fallback)
@@ -387,7 +395,7 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
     {
         auto settings = getSettings();
 
-        if (!settings.enabled || !isPotentiallyValidPointer(checkpoint))
+        if (!isPotentiallyValidPointer(checkpoint))
             return;
 
         if (!isNewPlacement && !isCheckpointTracked(checkpoint))
@@ -406,7 +414,28 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
         if (getCheckpointOverlayIds().contains(checkpoint))
             return;
 
-        phys->m_addToNodeContainer = true;
+        if (!settings.enabled)
+        {
+            if (!hasPlayer2Checkpoint(checkpoint, settings.player2Enabled) || !m_objectLayer)
+                return;
+
+            auto *player2Visual = CheckpointGameObject::create();
+            auto *overlay = cocos2d::CCNode::create();
+            if (!player2Visual || !overlay)
+                return;
+
+            int overlayId = getNextOverlayId()++;
+            overlay->setTag(0x4F000000 + overlayId);
+            player2Visual->setScale(phys->getScale());
+            player2Visual->setPosition(checkpoint->m_player2Checkpoint->m_position);
+            overlay->addChild(player2Visual);
+            m_objectLayer->addChild(overlay, phys->getZOrder());
+
+            getOverlayMap()[overlayId] = {checkpoint->m_uniqueID, overlay};
+            getCheckpointOverlayIds()[checkpoint] = overlayId;
+            return;
+        }
+
         phys->stopAllActions();
         phys->unscheduleAllSelectors();
 
@@ -419,18 +448,29 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
 
         cocos2d::CCSprite *outer = nullptr;
         cocos2d::CCSprite *inner = nullptr;
+        cocos2d::CCSprite *player2Outer = nullptr;
+        cocos2d::CCSprite *player2Inner = nullptr;
 
         if (useCustomImage)
         {
             outer = createSpriteFromPathOrFallback(settings.checkpointImage, pack.outerName);
+            if (hasPlayer2Checkpoint(checkpoint, settings.player2Enabled))
+                player2Outer = createSpriteFromPathOrFallback(settings.checkpointImage, pack.outerName);
         }
         else
         {
             outer = createSpriteFromPathOrFallback({}, pack.outerName);
             inner = createSpriteFromPathOrFallback({}, pack.innerName);
+            if (hasPlayer2Checkpoint(checkpoint, settings.player2Enabled))
+            {
+                player2Outer = createSpriteFromPathOrFallback({}, pack.outerName);
+                player2Inner = createSpriteFromPathOrFallback({}, pack.innerName);
+            }
         }
 
-        if (!outer || (!useCustomImage && !inner))
+        if (!outer || (!useCustomImage && !inner) ||
+            (hasPlayer2Checkpoint(checkpoint, settings.player2Enabled) &&
+             (!player2Outer || (!useCustomImage && !player2Inner))))
             return;
 
         outer->setID(checkpoint_mod::OuterId);
@@ -451,6 +491,29 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
 
             if (settings.innerColor)
                 inner->setColor(style.innerColor);
+
+            if (player2Outer)
+            {
+                player2Outer->setID(checkpoint_mod::OuterId);
+                player2Outer->setCascadeOpacityEnabled(false);
+                player2Outer->setCascadeColorEnabled(false);
+                player2Inner->setID(checkpoint_mod::InnerId);
+                player2Inner->setCascadeOpacityEnabled(false);
+                player2Inner->setCascadeColorEnabled(false);
+
+                if (settings.outerColor)
+                    player2Outer->setColor(style.outerColor);
+
+                if (settings.innerColor)
+                    player2Inner->setColor(style.innerColor);
+            }
+        }
+
+        if (player2Outer)
+        {
+            player2Outer->setID(checkpoint_mod::OuterId);
+            player2Outer->setCascadeOpacityEnabled(false);
+            player2Outer->setCascadeColorEnabled(false);
         }
 
         int idx = m_fields->placementIndex;
@@ -468,18 +531,35 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
             {
                 outer->setOpacity(0);
                 outer->setVisible(false);
+                if (player2Outer)
+                {
+                    player2Outer->setOpacity(0);
+                    player2Outer->setVisible(false);
+                }
             }
             else
             {
                 outer->setOpacity(0);
                 outer->setVisible(true);
                 outer->runAction(CCFadeTo::create(settings.fadeInDuration, targetOpacity));
+                if (player2Outer)
+                {
+                    player2Outer->setOpacity(0);
+                    player2Outer->setVisible(true);
+                    player2Outer->runAction(CCFadeTo::create(settings.fadeInDuration, targetOpacity));
+                }
             }
         }
         else
         {
             outer->setOpacity(targetOpacity);
             outer->setVisible(targetOpacity != 0);
+
+            if (player2Outer)
+            {
+                player2Outer->setOpacity(targetOpacity);
+                player2Outer->setVisible(targetOpacity != 0);
+            }
         }
 
         auto nodeSize = phys->getContentSize();
@@ -493,12 +573,37 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
         outer->setAnchorPoint({0.5f, 0.5f});
         outer->setScale(scale);
 
+        if (player2Outer)
+        {
+            auto player2Size = player2Outer->getContentSize();
+            auto player2Scale = std::min(
+                                   nodeSize.width / std::max(player2Size.width, 1.f),
+                                   nodeSize.height / std::max(player2Size.height, 1.f)) *
+                               style.scale;
+            player2Outer->setAnchorPoint({0.5f, 0.5f});
+            player2Outer->setScale(player2Scale);
+
+            if (!useCustomImage && player2Inner)
+            {
+                player2Inner->setAnchorPoint({0.5f, 0.5f});
+                player2Inner->setPosition({player2Size.width * 0.5f, player2Size.height * 0.5f});
+                player2Outer->addChild(player2Inner);
+            }
+        }
+
         cocos2d::CCNode *overlayParent = m_objectLayer;
         if (!overlayParent)
             overlayParent = phys->getParent();
 
         if (overlayParent)
         {
+            auto *overlay = cocos2d::CCNode::create();
+            if (!overlay)
+                return;
+
+            int overlayId = getNextOverlayId()++;
+            overlay->setTag(0x4F000000 + overlayId);
+
             auto physAnchor = phys->getAnchorPoint();
             auto physPos = phys->getPosition();
 
@@ -508,10 +613,11 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
                 physPos = overlayParent->convertToNodeSpace(worldPos);
             }
 
-            outer->setPosition({
+            auto player1Position = cocos2d::CCPoint{
                 physPos.x + (0.5f - physAnchor.x) * nodeSize.width,
                 physPos.y + (0.5f - physAnchor.y) * nodeSize.height,
-            });
+            };
+            outer->setPosition(player1Position);
 
             if (!useCustomImage && inner)
             {
@@ -520,14 +626,27 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
                 outer->addChild(inner);
             }
 
-            overlayParent->addChild(outer, phys->getZOrder());
+            overlay->addChild(outer);
 
-            int overlayId = getNextOverlayId()++;
-            getOverlayMap()[overlayId] = {checkpoint->m_uniqueID, outer};
+            if (player2Outer && hasPlayer2Checkpoint(checkpoint, settings.player2Enabled))
+            {
+                player2Outer->setPosition(checkpoint->m_player2Checkpoint->m_position);
+                overlay->addChild(player2Outer);
+            }
+
+            overlayParent->addChild(overlay, phys->getZOrder());
+
+            getOverlayMap()[overlayId] = {checkpoint->m_uniqueID, overlay};
             getCheckpointOverlayIds()[checkpoint] = overlayId;
         }
         else
         {
+            auto *overlay = cocos2d::CCNode::create();
+            if (!overlay)
+                return;
+
+            int overlayId = getNextOverlayId()++;
+            overlay->setTag(0x4F000000 + overlayId);
             outer->setPosition({nodeSize.width * 0.5f, nodeSize.height * 0.5f});
 
             if (!useCustomImage && inner)
@@ -537,10 +656,10 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
                 outer->addChild(inner);
             }
 
-            phys->addChild(outer, 1);
+            overlay->addChild(outer);
+            phys->addChild(overlay, 1);
 
-            int overlayId = getNextOverlayId()++;
-            getOverlayMap()[overlayId] = {checkpoint->m_uniqueID, outer};
+            getOverlayMap()[overlayId] = {checkpoint->m_uniqueID, overlay};
             getCheckpointOverlayIds()[checkpoint] = overlayId;
 
             if (settings.fade)
@@ -665,6 +784,13 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
         m_fields->checkpointArrayNeedsReconcile = true;
 
         PlayLayer::resetLevel();
+    }
+
+    void onExit()
+    {
+        clearAllCheckpointOverlays();
+        m_fields->checkpointQueue.clear();
+        PlayLayer::onExit();
     }
 
     CheckpointObject *getCheckpointToRemove(bool first)
