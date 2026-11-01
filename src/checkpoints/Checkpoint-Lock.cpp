@@ -17,6 +17,7 @@ namespace
     struct LockData
     {
         std::unordered_set<CheckpointObject *> locked;
+        std::unordered_set<size_t> lockedIndices;
         std::unordered_map<CheckpointObject *, CCSprite *> icons;
     };
 }
@@ -54,6 +55,45 @@ class $modify(CheckpointLockPlayLayer, PlayLayer)
 
         m_fields->lockData.icons.clear();
         m_fields->lockData.locked.clear();
+        m_fields->lockData.lockedIndices.clear();
+    }
+
+    void captureLockIndices()
+    {
+        auto &data = m_fields->lockData;
+        if (!m_checkpointArray)
+            return;
+
+        data.lockedIndices.clear();
+        for (size_t index = 0; index < m_checkpointArray->count(); ++index)
+        {
+            auto *checkpoint = static_cast<CheckpointObject *>(m_checkpointArray->objectAtIndex(index));
+            if (data.locked.contains(checkpoint))
+                data.lockedIndices.insert(index);
+        }
+    }
+
+    void rebindLocksToLiveCheckpoints()
+    {
+        auto &data = m_fields->lockData;
+        if (!m_checkpointArray)
+            return;
+
+        std::unordered_set<CheckpointObject *> liveLocked;
+        for (auto index : data.lockedIndices)
+        {
+            if (index < m_checkpointArray->count())
+            {
+                auto *checkpoint = static_cast<CheckpointObject *>(m_checkpointArray->objectAtIndex(index));
+                liveLocked.insert(checkpoint);
+            }
+        }
+
+        if (liveLocked == data.locked)
+            return;
+
+        data.locked = std::move(liveLocked);
+        rebuildLockIcons();
     }
 
     void rebuildLockIcons()
@@ -130,11 +170,13 @@ class $modify(CheckpointLockPlayLayer, PlayLayer)
         if (isLocked(checkpoint))
         {
             m_fields->lockData.locked.erase(checkpoint);
+            m_fields->lockData.lockedIndices.erase(m_checkpointArray->count() - 1);
             removeLockIcon(checkpoint);
             return;
         }
 
         m_fields->lockData.locked.insert(checkpoint);
+        m_fields->lockData.lockedIndices.insert(m_checkpointArray->count() - 1);
         showLockIcon(checkpoint);
     }
 
@@ -168,6 +210,7 @@ class $modify(CheckpointLockPlayLayer, PlayLayer)
             PlayLayer::removeCheckpoint(first);
             m_fields->lockData.locked.erase(checkpoint);
             removeLockIcon(checkpoint);
+            captureLockIndices();
             return;
         }
 
@@ -193,8 +236,16 @@ class $modify(CheckpointLockPlayLayer, PlayLayer)
 
     void resetLevel()
     {
+        captureLockIndices();
         PlayLayer::resetLevel();
+        rebindLocksToLiveCheckpoints();
         rebuildLockIcons();
+    }
+
+    void postUpdate(float dt)
+    {
+        PlayLayer::postUpdate(dt);
+        rebindLocksToLiveCheckpoints();
     }
 
     void onExit()

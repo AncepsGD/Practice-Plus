@@ -95,10 +95,21 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
         std::vector<CheckpointCommand> checkpointQueue;
         unsigned lastCheckpointCount = 0;
         bool checkpointArrayNeedsReconcile = true;
+        bool checkpointVisibilityInitialized = false;
+        bool checkpointsHidden = false;
+        struct CheckpointVisibilitySnapshot
+        {
+            bool checkpointVisible = true;
+            bool physicalVisible = true;
+            bool overlayVisible = true;
+            bool overlayCaptured = false;
+        };
+        std::unordered_map<CheckpointObject *, CheckpointVisibilitySnapshot> checkpointVisibility;
     };
 
     struct Settings
     {
+        bool hideCheckpoints = false;
         bool enabled = false;
         bool player2Enabled = true;
         bool outerColor = false;
@@ -131,12 +142,28 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
         return false;
     }
 
+    void clearPendingCheckpointsForRemovedObjects()
+    {
+        auto clearIfRemoved = [this](PlayerObject *player)
+        {
+            if (player && player->m_pendingCheckpoint &&
+                !isCheckpointTracked(player->m_pendingCheckpoint))
+            {
+                player->m_pendingCheckpoint = nullptr;
+            }
+        };
+
+        clearIfRemoved(m_player1);
+        clearIfRemoved(m_player2);
+    }
+
     static Settings getSettings()
     {
         Settings s;
 
         if (auto *mod = Mod::get())
         {
+            s.hideCheckpoints = mod->getSettingValue<bool>("hide-checkpoints");
             s.enabled = mod->getSettingValue<bool>("custom-checkpoints-enabled");
             s.player2Enabled = mod->getSettingValue<bool>("player-2-checkpoints-enabled");
             s.outerColor = mod->getSettingValue<bool>("checkpoint-outer-color-enabled");
@@ -299,6 +326,60 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
         return enabled && checkpoint && checkpoint->m_gameState.m_isDualMode && checkpoint->m_player2Checkpoint;
     }
 
+    void hideCheckpointForSetting(
+        CheckpointObject *checkpoint,
+        GameObject *physicalCheckpoint)
+    {
+        auto [snapshotIt, inserted] = m_fields->checkpointVisibility.try_emplace(checkpoint);
+        auto &snapshot = snapshotIt->second;
+        if (inserted)
+        {
+            snapshot.checkpointVisible = checkpoint->isVisible();
+            snapshot.physicalVisible = physicalCheckpoint->isVisible();
+        }
+
+        checkpoint->setVisible(false);
+        physicalCheckpoint->setVisible(false);
+
+        auto checkpointIt = getCheckpointOverlayIds().find(checkpoint);
+        if (checkpointIt == getCheckpointOverlayIds().end())
+            return;
+
+        auto overlayIt = getOverlayMap().find(checkpointIt->second);
+        if (overlayIt == getOverlayMap().end() || !overlayIt->second.second)
+            return;
+
+        auto *overlay = overlayIt->second.second;
+        if (!snapshot.overlayCaptured)
+        {
+            snapshot.overlayVisible = overlay->isVisible();
+            snapshot.overlayCaptured = true;
+        }
+        overlay->setVisible(false);
+    }
+
+    void restoreCheckpointVisibility(CheckpointObject *checkpoint)
+    {
+        auto snapshotIt = m_fields->checkpointVisibility.find(checkpoint);
+        if (snapshotIt == m_fields->checkpointVisibility.end())
+            return;
+
+        auto const snapshot = snapshotIt->second;
+        checkpoint->setVisible(snapshot.checkpointVisible);
+        if (isPotentiallyValidPointer(checkpoint->m_physicalCheckpointObject))
+            checkpoint->m_physicalCheckpointObject->setVisible(snapshot.physicalVisible);
+
+        auto checkpointIt = getCheckpointOverlayIds().find(checkpoint);
+        if (snapshot.overlayCaptured && checkpointIt != getCheckpointOverlayIds().end())
+        {
+            auto overlayIt = getOverlayMap().find(checkpointIt->second);
+            if (overlayIt != getOverlayMap().end() && overlayIt->second.second)
+                overlayIt->second.second->setVisible(snapshot.overlayVisible);
+        }
+
+        m_fields->checkpointVisibility.erase(snapshotIt);
+    }
+
     static cocos2d::CCSprite *createSpriteFromPathOrFallback(
         std::filesystem::path const &path,
         geode::ZStringView fallback)
@@ -411,8 +492,20 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
         if (!phys->getParent() && !checkpoint->getParent())
             return;
 
-        if (getCheckpointOverlayIds().contains(checkpoint))
+        if (settings.hideCheckpoints)
+        {
+            hideCheckpointForSetting(checkpoint, phys);
             return;
+        }
+
+        restoreCheckpointVisibility(checkpoint);
+
+        if (getCheckpointOverlayIds().contains(checkpoint))
+        {
+            if (settings.enabled)
+                hideCheckpointVisuals(checkpoint);
+            return;
+        }
 
         if (!settings.enabled)
         {
@@ -726,7 +819,30 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
         PlayLayer::postUpdate(dt);
 
         auto settings = getSettings();
-        if (!settings.enabled || !m_checkpointArray)
+        if (!m_checkpointArray)
+        {
+            commitCheckpointQueue();
+            return;
+        }
+
+        if (!m_fields->checkpointVisibilityInitialized ||
+            m_fields->checkpointsHidden != settings.hideCheckpoints)
+        {
+            m_fields->checkpointVisibilityInitialized = true;
+            m_fields->checkpointsHidden = settings.hideCheckpoints;
+
+            if (settings.hideCheckpoints || !m_fields->checkpointVisibility.empty())
+            {
+                for (unsigned i = 0; i < m_checkpointArray->count(); ++i)
+                {
+                    auto *checkpoint = static_cast<CheckpointObject *>(m_checkpointArray->objectAtIndex(i));
+                    if (checkpoint)
+                        m_fields->checkpointQueue.push_back({CheckpointCommand::Load, checkpoint, false});
+                }
+            }
+        }
+
+        if (settings.hideCheckpoints || !settings.enabled)
         {
             commitCheckpointQueue();
             return;
@@ -772,6 +888,7 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
 
         getOverlayMap().clear();
         getCheckpointOverlayIds().clear();
+        m_fields->checkpointVisibility.clear();
     }
 
     void resetLevel()
@@ -808,24 +925,11 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
         if (!checkpoint)
             return;
 
+        m_fields->checkpointVisibility.erase(checkpoint);
+
         auto it = getCheckpointOverlayIds().find(checkpoint);
         if (it == getCheckpointOverlayIds().end())
             return;
-
-        auto *phys = checkpoint->m_physicalCheckpointObject;
-        if (!phys)
-        {
-            int oid = it->second;
-            auto overlayIt = getOverlayMap().find(oid);
-            if (overlayIt != getOverlayMap().end())
-            {
-                removeOverlayNodeByTag(oid, overlayIt->second.second);
-                getOverlayMap().erase(overlayIt);
-            }
-
-            getCheckpointOverlayIds().erase(it);
-            return;
-        }
 
         int oid = it->second;
         auto overlayIt = getOverlayMap().find(oid);
@@ -901,6 +1005,7 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
     void removeAllCheckpoints()
     {
         PlayLayer::removeAllCheckpoints();
+        clearPendingCheckpointsForRemovedObjects();
         m_fields->checkpointQueue.push_back({CheckpointCommand::Reset, nullptr, false});
         m_fields->checkpointArrayNeedsReconcile = true;
     }
@@ -933,6 +1038,7 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
     {
         auto *checkpoint = getCheckpointToRemove(p0);
         PlayLayer::removeCheckpoint(p0);
+        clearPendingCheckpointsForRemovedObjects();
         m_fields->checkpointQueue.push_back({CheckpointCommand::Remove, checkpoint, false});
         m_fields->checkpointArrayNeedsReconcile = true;
     }

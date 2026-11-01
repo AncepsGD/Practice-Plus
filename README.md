@@ -28,7 +28,7 @@ Practice Plus expands Practice Mode with configurable checkpoints, visual custom
 
 - Display a practice overlay with either the player's X position or current frame.
 - Collect coins in practice mode.
-- Loop level music.
+- Loop level music in practice mode, using full Newgrounds songs for supported main levels (requires internet).
 - Turn off death effects.
 - Confirm before exiting practice mode.
 - Keep 2 player buffered inputs independent with the 2 Player Buffer Fix.

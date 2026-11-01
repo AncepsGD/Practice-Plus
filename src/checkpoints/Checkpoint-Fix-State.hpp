@@ -4,11 +4,11 @@
 #include <array>
 
 #ifndef GEODE_LIKELY
-    #if defined(__GNUC__) || defined(__clang__)
-        #define GEODE_LIKELY(x) __builtin_expect(!!(x), 1)
-    #else
-        #define GEODE_LIKELY(x) (x)
-    #endif
+#if defined(__GNUC__) || defined(__clang__)
+#define GEODE_LIKELY(x) __builtin_expect(!!(x), 1)
+#else
+#define GEODE_LIKELY(x) (x)
+#endif
 #endif
 
 struct PlayerState
@@ -479,7 +479,7 @@ struct PlayerState
 
 inline void PlayerState::saveState(PlayerObject *player)
 {
-    auto& p = *player;
+    auto &p = *player;
 
     position = p.getPosition();
     rotation = p.getRotation();
@@ -488,7 +488,7 @@ inline void PlayerState::saveState(PlayerObject *player)
     scaleX = p.getScaleX();
     scaleY = p.getScaleY();
 
-    if (auto* obb = p.m_orientedBox; GEODE_LIKELY(obb))
+    if (auto *obb = p.m_orientedBox; GEODE_LIKELY(obb))
         obbMembers.m_corners = obb->m_corners;
 
     plMembers.m_wasTeleported = p.m_wasTeleported;
@@ -546,7 +546,7 @@ inline void PlayerState::saveState(PlayerObject *player)
 
 inline void PlayerState::loadState(PlayerObject *player) const
 {
-    auto& p = *player;
+    auto &p = *player;
 
     p.setPosition(position);
     p.setRotation(rotation);
@@ -555,7 +555,7 @@ inline void PlayerState::loadState(PlayerObject *player) const
     p.setScaleX(scaleX);
     p.setScaleY(scaleY);
 
-    if (auto* obb = p.m_orientedBox; GEODE_LIKELY(obb))
+    if (auto *obb = p.m_orientedBox; GEODE_LIKELY(obb))
         obb->m_corners = obbMembers.m_corners;
 
     p.m_wasTeleported = plMembers.m_wasTeleported;

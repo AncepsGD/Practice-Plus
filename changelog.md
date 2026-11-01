@@ -1,3 +1,14 @@
+# v1.6.0
+- added optimization setting "Disable Level Music" and "Apply Disabled Music in Normal Mode" which doubles the respawn speed
+- added option to toggle parts of the practice overlay
+- added setting "Hide Checkpoints" which disables its rendering (while keeping functionality)
+- added setting "No Death Sound"
+- added stat to practice overlay "Resets per Second"
+- fixed auto checkpoint causing instant respawns after deleting a checkpoint and respawning from a checkpoint
+- fixed checkpoint locks disappearing
+- fixed time and attempts persisting when checkpoint continuity is turned off
+- updated music loop so it plays full versions of the main songs
+
 # v1.5.0
 - 2 player buffer fix has been FINALIZED! no reported issues from me at least
 - added checkpoint continuity (VERY UNSTABLE; TESTING ONLY), which allows you to save progress after quitting a level

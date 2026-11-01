@@ -2,6 +2,7 @@
 #include <Geode/modify/PlayLayer.hpp>
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -9,6 +10,15 @@
 using namespace geode::prelude;
 
 int &getActiveRespawnPresetIndexState();
+
+namespace {
+    bool g_clickRespawnEnabled = false;
+}
+
+bool &getClickRespawnEnabledState()
+{
+    return g_clickRespawnEnabled;
+}
 
 struct PersistedPracticeSession
 {
@@ -23,6 +33,7 @@ struct OverlayColumn
     CCNode *node = nullptr;
     CCSprite *icon = nullptr;
     CCLabelBMFont *label = nullptr;
+    std::string settingId;
 };
 
 class $modify(MyPlayLayer, PlayLayer)
@@ -46,6 +57,9 @@ class $modify(MyPlayLayer, PlayLayer)
 
         CCLabelBMFont *attemptsLabel = nullptr;
         int attemptCount = 0;
+        CCLabelBMFont *resetsPerSecondLabel = nullptr;
+        double resetsPerSecond = 0.0;
+        int lastResetsPerSecondHundredths = -1;
 
         CCLabelBMFont *positionLabel = nullptr;
         std::vector<OverlayColumn> overlayColumns;
@@ -62,6 +76,22 @@ class $modify(MyPlayLayer, PlayLayer)
             return mod->getSettingValue<bool>("practice-overlay-enabled");
 
         return true;
+    }
+
+    bool isOverlayComponentEnabled(std::string const &settingId) const
+    {
+        if (auto *mod = Mod::get())
+            return mod->getSettingValue<bool>(settingId);
+
+        return true;
+    }
+
+    bool isCheckpointContinuityEnabled() const
+    {
+        if (auto *mod = Mod::get())
+            return mod->getSettingValue<bool>("checkpoint-continuity-enabled");
+
+        return false;
     }
 
     void startSessionTimer()
@@ -151,6 +181,40 @@ class $modify(MyPlayLayer, PlayLayer)
         updateOverlayLayout();
     }
 
+    void refreshResetsPerSecondLabel()
+    {
+        auto &f = this->m_fields;
+        if (!f->resetsPerSecondLabel)
+            return;
+
+        int displayedHundredths =
+            static_cast<int>(std::lround(f->resetsPerSecond * 100.0));
+        if (displayedHundredths == f->lastResetsPerSecondHundredths)
+            return;
+
+        f->lastResetsPerSecondHundredths = displayedHundredths;
+        f->resetsPerSecondLabel->setString(
+            fmt::format("{:.2f}/s", f->resetsPerSecond).c_str());
+        updateOverlayLayout();
+    }
+
+    void updateResetsPerSecondLabel(float dt)
+    {
+        auto &f = this->m_fields;
+        f->resetsPerSecond *= std::exp(-static_cast<double>(std::max(dt, 0.0f)));
+        if (f->resetsPerSecond < 0.005)
+            f->resetsPerSecond = 0.0;
+
+        refreshResetsPerSecondLabel();
+    }
+
+    void recordResetForRate()
+    {
+        auto &f = this->m_fields;
+        f->resetsPerSecond += 1.0;
+        refreshResetsPerSecondLabel();
+    }
+
     void resetAttemptAndTimeCounters()
     {
         auto &f = this->m_fields;
@@ -200,14 +264,16 @@ class $modify(MyPlayLayer, PlayLayer)
         const float minScale = 0.55f;
 
         float availableWidth = std::max(120.0f, director->getWinSize().width - leftInset - 10.0f);
+        std::vector<OverlayColumn *> visibleColumns;
         std::vector<float> columnWidths;
         float totalWidth = 0.0f;
 
         for (auto &column : f->overlayColumns)
         {
-            if (!column.node || !column.label || !column.icon)
+            if (!column.node || !column.label || !column.icon || !column.node->isVisible())
                 continue;
 
+            visibleColumns.push_back(&column);
             float labelWidth = column.label->getContentSize().width * baseLabelScale;
             float iconWidth = column.icon->getContentSize().width * baseIconScale;
             float width = std::max(26.0f, std::max(labelWidth, iconWidth) + 10.0f);
@@ -223,19 +289,36 @@ class $modify(MyPlayLayer, PlayLayer)
             scale = std::max(minScale, availableWidth / totalWidth);
 
         float currentX = leftInset;
-        size_t visibleIndex = 0;
-        for (auto &column : f->overlayColumns)
+        for (size_t i = 0; i < visibleColumns.size(); ++i)
         {
-            if (!column.node || !column.label || !column.icon)
-                continue;
-
-            float width = columnWidths.empty() ? 26.0f : columnWidths[visibleIndex] * scale;
+            auto &column = *visibleColumns[i];
+            float width = columnWidths[i] * scale;
             column.node->setPositionX(currentX);
             column.label->setScale(baseLabelScale * scale);
             column.icon->setScale(baseIconScale * scale);
             currentX += width + spacing * scale;
-            visibleIndex += 1;
         }
+    }
+
+    void updateOverlayComponentVisibility()
+    {
+        auto &f = this->m_fields;
+        bool changed = false;
+        for (auto &column : f->overlayColumns)
+        {
+            if (!column.node)
+                continue;
+
+            bool shouldShow = isOverlayComponentEnabled(column.settingId);
+            if (column.node->isVisible() != shouldShow)
+            {
+                column.node->setVisible(shouldShow);
+                changed = true;
+            }
+        }
+
+        if (changed)
+            updateOverlayLayout();
     }
 
     bool init(GJGameLevel *level, bool useReplay, bool dontCreateObjects)
@@ -246,16 +329,20 @@ class $modify(MyPlayLayer, PlayLayer)
         auto &f = this->m_fields;
         f->lastCheckpointCount = m_checkpointArray ? m_checkpointArray->count() : 0;
 
+        bool continuityEnabled = isCheckpointContinuityEnabled();
         int levelID = m_level ? m_level->m_levelID.value() : -1;
-        auto savedSession = s_persistedPracticeSessions.find(levelID);
-        f->accumulatedSeconds = savedSession != s_persistedPracticeSessions.end()
-                                    ? savedSession->second.accumulatedSeconds
-                                    : 0.0;
+        auto savedSession = m_level ? s_persistedPracticeSessions.find(levelID)
+                        : s_persistedPracticeSessions.end();
+        f->accumulatedSeconds = continuityEnabled && savedSession != s_persistedPracticeSessions.end()
+                        ? savedSession->second.accumulatedSeconds
+                        : 0.0;
         f->sessionRunning = true;
         f->sessionPaused = false;
-        f->attemptCount = savedSession != s_persistedPracticeSessions.end()
+        f->attemptCount = continuityEnabled && savedSession != s_persistedPracticeSessions.end()
                               ? savedSession->second.attemptCount
                               : 0;
+        if (!continuityEnabled && m_level)
+            s_persistedPracticeSessions.erase(levelID);
         startSessionTimer();
 
         createPracticeHUD();
@@ -408,7 +495,7 @@ class $modify(MyPlayLayer, PlayLayer)
         float startX = 10.f;
         float yPos = 25.f;
 
-        auto addColumn = [&](const char *key, const char *sprite, float x, CCLabelBMFont **labelOut = nullptr) -> CCNode *
+        auto addColumn = [&](const char *key, const char *sprite, float x, const char *settingId, CCLabelBMFont **labelOut = nullptr) -> CCNode *
         {
             auto node = CCNode::create();
             node->setPosition({x, yPos});
@@ -431,19 +518,21 @@ class $modify(MyPlayLayer, PlayLayer)
             if (labelOut)
                 *labelOut = label;
 
-            f->overlayColumns.push_back({node, icon, label});
+            f->overlayColumns.push_back({node, icon, label, settingId});
             return node;
         };
 
-        addColumn("Z", "add_checkpoint.png"_spr, startX);
-        addColumn("X", "remove_checkpoint.png"_spr, startX);
-        addColumn("C", "respawn_time_cycle.png"_spr, startX, &f->respawnLabel);
-        addColumn("V", "lock-unlock.png"_spr, startX);
-        addColumn("0", "attempt_count.png"_spr, startX, &f->attemptsLabel);
+        addColumn("Z", "add_checkpoint.png"_spr, startX, "practice-overlay-checkpoint-placement");
+        addColumn("X", "remove_checkpoint.png"_spr, startX, "practice-overlay-checkpoint-removal");
+        addColumn("C", "respawn_time_cycle.png"_spr, startX, "practice-overlay-respawn-preset", &f->respawnLabel);
+        addColumn("V", "lock-unlock.png"_spr, startX, "practice-overlay-checkpoint-lock");
+        addColumn("0", "attempt_count.png"_spr, startX, "practice-overlay-attempt-count", &f->attemptsLabel);
+        addColumn("0.00/s", "respawn_time_cycle.png"_spr, startX, "practice-overlay-resets-per-second", &f->resetsPerSecondLabel);
         f->sessionColumnBaseX = startX;
-        f->sessionColumnNode = addColumn("0h 0m 0s", "time.png"_spr, startX, &f->sessionLabel);
-        addColumn("0", "position_x.png"_spr, startX, &f->positionLabel);
+        f->sessionColumnNode = addColumn("0h 0m 0s", "time.png"_spr, startX, "practice-overlay-session-time", &f->sessionLabel);
+        addColumn("0", "position_x.png"_spr, startX, "practice-overlay-position", &f->positionLabel);
 
+        updateOverlayComponentVisibility();
         updateOverlayLayout();
     }
 
@@ -453,9 +542,13 @@ class $modify(MyPlayLayer, PlayLayer)
         if (!f->uiLayer)
             return;
 
+        updateOverlayVisibility();
+        updateOverlayComponentVisibility();
+
         if (!isPracticeMode())
             return;
 
+        updateResetsPerSecondLabel(dt);
         refreshRespawnLabel();
         syncSessionTimerWithPlayerState();
         updateSessionLabel();
@@ -511,9 +604,17 @@ class $modify(MyPlayLayer, PlayLayer)
         auto &f = this->m_fields;
         if (m_level)
         {
-            auto &savedSession = s_persistedPracticeSessions[m_level->m_levelID.value()];
-            savedSession.accumulatedSeconds = f->accumulatedSeconds;
-            savedSession.attemptCount = f->attemptCount;
+            int levelID = m_level->m_levelID.value();
+            if (isCheckpointContinuityEnabled())
+            {
+                auto &savedSession = s_persistedPracticeSessions[levelID];
+                savedSession.accumulatedSeconds = f->accumulatedSeconds;
+                savedSession.attemptCount = f->attemptCount;
+            }
+            else
+            {
+                s_persistedPracticeSessions.erase(levelID);
+            }
         }
         f->sessionRunning = false;
         PlayLayer::onQuit();
@@ -534,6 +635,9 @@ class $modify(MyPlayLayer, PlayLayer)
         PlayLayer::resetLevel();
 
         auto &f = this->m_fields;
+        if (isPracticeMode())
+            recordResetForRate();
+
         f->lastCheckpointCount = m_checkpointArray ? m_checkpointArray->count() : 0;
 
         if (f->lastCheckpointCount == 0)

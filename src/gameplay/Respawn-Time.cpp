@@ -158,7 +158,7 @@ class $modify(PracticeRespawnPlayLayer, PlayLayer)
         if (m_fields->resetToCheckpoint)
             PlayLayer::resetLevel();
         else
-            PlayLayer::delayedResetLevel();
+            this->delayedResetLevel();
     }
 
     void delayedResetLevel()
