@@ -21,6 +21,7 @@ file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c
 
 add_library(${PROJECT_NAME} SHARED ${SOURCES})
 target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_definitions(${PROJECT_NAME} PRIVATE CONTINUITY_DEBUG_LOG=1)
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES ${SOURCES})
 
 if (NOT DEFINED ENV{GEODE_SDK})
@@ -32,3 +33,7 @@ endif()
 add_subdirectory($ENV{GEODE_SDK} ${CMAKE_CURRENT_BINARY_DIR}/geode)
 
 setup_geode_mod(${PROJECT_NAME})
+
+if (APPLE AND TARGET GeodeBindings)
+    target_compile_options(GeodeBindings PRIVATE "-include" "Geode/Bindings.hpp")
+endif()
