@@ -1,11 +1,12 @@
 #include <Geode/Geode.hpp>
 #include <Geode/modify/FMODAudioEngine.hpp>
+#include <string_view>
 
 using namespace geode::prelude;
 
 namespace {
     bool isDeathSound(const gd::string& path) {
-        return path.find("explode_11.ogg") != gd::string::npos;
+        return std::string_view(path.c_str()).find("explode_11.ogg") != std::string_view::npos;
     }
 
     bool shouldSuppressDeathSound(const gd::string& path) {
