@@ -44,7 +44,7 @@ namespace continuity
         int rotateChannel = 0;
         float levelFlipping = 0.0f;
 
-        static GameStateSlice capture(GJGameState const &state);
+        static GameStateSlice capture(GJGameState &state);
         void apply(GJGameState &state) const;
     };
 

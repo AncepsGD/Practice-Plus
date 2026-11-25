@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <Geode/Geode.hpp>
+#include <asp/fs/std.hpp>
 #include <Geode/binding/CheckpointGameObject.hpp>
 #include <Geode/modify/GJBaseGameLayer.hpp>
 #include <Geode/modify/PlayLayer.hpp>
@@ -184,7 +185,9 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
                 0.05f,
                 static_cast<float>(mod->getSettingValue<double>("checkpoint-fadein-duration")));
 
-            s.checkpointImage = mod->getSettingValue<std::filesystem::path>("checkpoint-image");
+            s.checkpointImage = asp::fs::Path{
+                mod->getSettingValue<std::string>("checkpoint-image")
+            }.toStdPath().unwrap();
         }
 
         return s;
@@ -386,7 +389,7 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
     {
         if (!path.empty())
         {
-            auto pathStr = string::pathToString(path);
+            auto pathStr = asp::fs::Path::fromStdPath(path).string();
             if (auto *sprite = cocos2d::CCSprite::create(pathStr.c_str()))
                 return sprite;
         }

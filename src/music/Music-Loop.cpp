@@ -4,6 +4,7 @@
 #include <Geode/binding/GJGameLevel.hpp>
 #include <Geode/binding/MusicDownloadManager.hpp>
 #include <Geode/utils/web.hpp>
+#include <asp/fs/std.hpp>
 #include <cctype>
 #include <filesystem>
 #include <string>
@@ -22,7 +23,7 @@ namespace {
     }
 
     std::filesystem::path getCachedMusicPath(int songID) {
-        return Mod::get()->getSaveDir() / "music-loop-cache" /
+        return Mod::get()->getSaveDir().toStdPath().unwrap() / "music-loop-cache" /
             fmt::format("newgrounds-{}.mp3", songID);
     }
 
@@ -51,7 +52,7 @@ namespace {
                 std::error_code error;
                 std::filesystem::create_directories(cachePath.parent_path(), error);
                 if (!error) {
-                    auto saved = response.into(cachePath);
+                    auto saved = response.into(asp::fs::Path::fromStdPath(cachePath));
                     success = saved.isOk();
                 } else {
                     success = false;
@@ -369,8 +370,8 @@ class $modify(PracticeMusicLoopPlayLayer, PlayLayer) {
         }
     }
 
-    bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
-        if (!PlayLayer::init(level, useReplay, dontCreateObjects)) return false;
+    bool init(GJGameLevel* level, bool dontCreateObjects) {
+        if (!PlayLayer::init(level, dontCreateObjects)) return false;
         m_fields->practiceAudio.stop();
         m_fields->practiceMode = false;
         m_fields->gameplayPaused = false;

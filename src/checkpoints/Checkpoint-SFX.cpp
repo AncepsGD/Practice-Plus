@@ -1,6 +1,7 @@
 #include <Geode/Geode.hpp>
 #include <Geode/modify/PlayLayer.hpp>
 #include <Geode/binding/FMODAudioEngine.hpp>
+#include <asp/fs/std.hpp>
 
 #include <filesystem>
 #include <system_error>
@@ -18,10 +19,11 @@ namespace
 
         if (file.is_absolute())
         {
-            return string::pathToString(file);
+            return asp::fs::Path::fromStdPath(file).string();
         }
 
-        return string::pathToString(Mod::get()->getResourcesDir() / file);
+        return (Mod::get()->getResourcesDir() /
+                asp::fs::Path::fromStdPath(file)).string();
     }
 
     void playCheckpointSound(std::filesystem::path const &file, std::filesystem::path const &fallback)
@@ -58,7 +60,9 @@ class $modify(PlayLayer)
         if (!ret)
             return nullptr;
 
-        auto file = Mod::get()->getSettingValue<std::filesystem::path>("checkpoint-sfx-path");
+        auto file = asp::fs::Path{
+            Mod::get()->getSettingValue<std::string>("checkpoint-sfx-path")
+        }.toStdPath().unwrap();
         playCheckpointSound(file, "checkpoint_place_sfx.ogg"_spr);
         return ret;
     }
@@ -67,7 +71,9 @@ class $modify(PlayLayer)
     {
         PlayLayer::removeCheckpoint(p0);
 
-        auto file = Mod::get()->getSettingValue<std::filesystem::path>("checkpoint-remove-sfx-path");
+        auto file = asp::fs::Path{
+            Mod::get()->getSettingValue<std::string>("checkpoint-remove-sfx-path")
+        }.toStdPath().unwrap();
         playCheckpointSound(file, "checkpoint_remove_sfx.ogg"_spr);
     }
 };

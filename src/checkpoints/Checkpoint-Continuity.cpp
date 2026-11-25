@@ -74,11 +74,11 @@ namespace continuity
             exclude(&PlayerCheckpoint::m_collidingWithRight);
             exclude(&PlayerCheckpoint::m_currentPotentialSlope);
             exclude(&PlayerCheckpoint::m_currentSlope);
-            exclude(&PlayerCheckpoint::m_ringRelatedSet);
+            exclude(&PlayerCheckpoint::m_usedRings);
             exclude(&PlayerCheckpoint::m_touchingRings);
             exclude(&PlayerCheckpoint::m_touchedRings);
             exclude(&PlayerCheckpoint::m_lastActivatedPortal);
-            exclude(&PlayerCheckpoint::m_jumpPadRelated);
+            exclude(&PlayerCheckpoint::m_touchedForceIds);
 
             std::sort(excluded.begin(), excluded.end(), [](Range const &left, Range const &right) {
                 return left.start < right.start;
@@ -133,8 +133,8 @@ namespace continuity
                 return result;
             }
 
-            gd::vector<SavedActiveObjectState> active;
-            gd::vector<SavedSpecialObjectState> special;
+            std::vector<SavedActiveObjectState> active;
+            std::vector<SavedSpecialObjectState> special;
             layer->saveActiveSaveObjects(active, special);
             result.reserve(active.size());
 
@@ -158,18 +158,18 @@ namespace continuity
         }
     }
 
-    GameStateSlice GameStateSlice::capture(GJGameState const &state)
+    GameStateSlice GameStateSlice::capture(GJGameState &state)
     {
         GameStateSlice slice;
         slice.isDualMode = state.m_isDualMode;
         slice.middleGroundOffsetY = state.m_middleGroundOffsetY;
         slice.dualRelated = state.m_dualRelated;
-        slice.mirrored = state.m_unkBool10;
+        slice.mirrored = state.m_isFlipped;
         slice.cameraZoom = state.m_cameraZoom;
         slice.targetCameraZoom = state.m_targetCameraZoom;
         slice.cameraOffset = state.m_cameraOffset;
         slice.cameraPosition = state.m_cameraPosition;
-        slice.cameraPosition2 = state.m_cameraPosition2;
+        slice.cameraPosition2 = state.m_cameraLastPosition;
         slice.cameraStepDiff = state.m_cameraStepDiff;
         slice.cameraAngle = state.m_cameraAngle;
         slice.targetCameraAngle = state.m_targetCameraAngle;
@@ -183,7 +183,7 @@ namespace continuity
         slice.currentProgress = state.m_currentProgress;
         slice.currentChannel = state.m_currentChannel;
         slice.rotateChannel = state.m_rotateChannel;
-        slice.levelFlipping = state.m_levelFlipping;
+        slice.levelFlipping = state.m_levelFlipProgress;
         return slice;
     }
 
@@ -192,12 +192,12 @@ namespace continuity
         state.m_isDualMode = isDualMode;
         state.m_middleGroundOffsetY = middleGroundOffsetY;
         state.m_dualRelated = dualRelated;
-        state.m_unkBool10 = mirrored;
+        state.m_isFlipped = mirrored;
         state.m_cameraZoom = cameraZoom;
         state.m_targetCameraZoom = targetCameraZoom;
         state.m_cameraOffset = cameraOffset;
         state.m_cameraPosition = cameraPosition;
-        state.m_cameraPosition2 = cameraPosition2;
+        state.m_cameraLastPosition = cameraPosition2;
         state.m_cameraStepDiff = cameraStepDiff;
         state.m_cameraAngle = cameraAngle;
         state.m_targetCameraAngle = targetCameraAngle;
@@ -211,7 +211,7 @@ namespace continuity
         state.m_currentProgress = currentProgress;
         state.m_currentChannel = currentChannel;
         state.m_rotateChannel = rotateChannel;
-        state.m_levelFlipping = levelFlipping;
+        state.m_levelFlipProgress = levelFlipping;
     }
 
     SavedCheckpoint SavedCheckpoint::capture(PlayLayer *layer, CheckpointObject *checkpoint)
