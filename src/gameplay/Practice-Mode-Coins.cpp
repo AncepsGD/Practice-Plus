@@ -1,5 +1,6 @@
 #include <Geode/Geode.hpp>
 #include <Geode/modify/GJBaseGameLayer.hpp>
+#include <vector>
 
 using namespace geode::prelude;
 
@@ -7,7 +8,7 @@ class $modify(PracticeCoinsGJBGL, GJBaseGameLayer)
 {
     void collisionCheckObjects(
         PlayerObject *player,
-        gd::vector<GameObject *> *sectionObjects,
+        std::vector<GameObject *> *sectionObjects,
         int objectCount,
         float dt)
     {

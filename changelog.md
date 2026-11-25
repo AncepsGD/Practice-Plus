@@ -1,3 +1,7 @@
+# v1.7.0
+- ported to 2.2091
+- removed 2 player buffer fix as it was finally fixed in 2.209
+
 # v1.6.0
 - added optimization setting "Disable Level Music" and "Apply Disabled Music in Normal Mode" which doubles the respawn speed
 - added option to toggle parts of the practice overlay
