@@ -515,6 +515,9 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
             if (!hasPlayer2Checkpoint(checkpoint, settings.player2Enabled) || !m_objectLayer)
                 return;
 
+#if defined(GEODE_IS_IOS)
+            return;
+#else
             auto *player2Visual = CheckpointGameObject::create();
             auto *overlay = cocos2d::CCNode::create();
             if (!player2Visual || !overlay)
@@ -530,6 +533,7 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
             getOverlayMap()[overlayId] = {checkpoint->m_uniqueID, overlay};
             getCheckpointOverlayIds()[checkpoint] = overlayId;
             return;
+#endif
         }
 
         phys->stopAllActions();

@@ -133,6 +133,10 @@ namespace continuity
                 return result;
             }
 
+#if defined(GEODE_IS_IOS)
+            log::info("[Continuity] activation capture is unavailable on iOS; skipping");
+            return result;
+#else
             std::vector<SavedActiveObjectState> active;
             std::vector<SavedSpecialObjectState> special;
             layer->saveActiveSaveObjects(active, special);
@@ -155,6 +159,7 @@ namespace continuity
             }
             log::info("[Continuity] captured {} active object states", result.size());
             return result;
+#endif
         }
     }
 
