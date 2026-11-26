@@ -86,9 +86,11 @@ class $modify(NoMusicFMOD, FMODAudioEngine) {
         );
     }
 
+#if !defined(GEODE_IS_IOS)
     void resumeAllMusic() {
         if (blockMusic())
             return;
         FMODAudioEngine::resumeAllMusic();
     }
+#endif
 };
