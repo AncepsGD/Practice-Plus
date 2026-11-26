@@ -1047,6 +1047,7 @@ class $modify(CustomCheckpointsPlayLayer, PlayLayer)
     }
 };
 
+#if !defined(GEODE_IS_IOS)
 class $modify(SafePlayerObject, PlayerObject)
 {
     void removePendingCheckpoint()
@@ -1061,3 +1062,4 @@ class $modify(SafePlayerObject, PlayerObject)
         PlayerObject::removePendingCheckpoint();
     }
 };
+#endif
